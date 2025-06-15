@@ -1,0 +1,40 @@
+Perform "npm run dev" to start the Backend on http://localhost:3000
+
+Proposed Project Structure:
+SEBA
+    Backend
+        node_modules
+        src
+            config
+            controllers
+            middleware
+            models
+            routes
+            services
+            utils
+            index.js
+        .env
+        .gitignore
+        package-lock.json
+        package.json
+        README.md
+    Frontend
+        my-app
+            node_modules
+            src
+                api
+                assets
+                components
+                context
+                hooks
+                pages
+                styles
+                App.jsx
+                main.jsx
+            eslint.config.js
+            index.html
+            package-lock.json
+            package.json
+            vite.config.js
+        .gitignore
+        README.md   
