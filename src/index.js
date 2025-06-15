@@ -1,20 +1,22 @@
-const express = require('express'); // Express framework for Node.js stored in express variable
-const app = express(); // Instance of Express application stored in app variable
-const mongoose = require('mongoose'); // RMongoose for MongoDB object modeling stored in mongoose variable
-require('dotenv').config(); // Load environment variables from .env file
+// Import express, connectDB function, and dotenv for environment variables
+const express = require('express');
+const connectDB = require('./config/db');
+require('dotenv').config();
 
-app.use(express.json()); //Parse incoming JSON requests into JavaScript objects
+const app = express();
+app.use(express.json());
 
-const apiRouter = require('./routes/routes') // Import routes from routes file
-app.use('/api', apiRouter); // Use the imported routes for all requests
+// Import routes and use them with the '/api' prefix
+const apiRouter = require('./routes/routes') // Import routes
+app.use('/api', apiRouter);
 
-// Connect to MongoDB using Mongoose and handle connection errors
-mongoose.connect(process.env.MONGO_URI)
+
+// Connect to MongoDB using the connectDB function
+connectDB()
     .then(() => {
         app.listen(process.env.PORT, () => {
-        console.log(`Connected to DB and listening at http://localhost:${process.env.PORT}`);
-        });
-    })
-    .catch(err => {
-        console.error('MongoDB connection error:', err);
+    console.log(`Backend listening on http://localhost:${process.env.PORT}`);
     });
+}).catch(err => {
+    console.error('MongoDB connection error:', err);
+});
