@@ -3,6 +3,9 @@
 const express = require('express');
 const router = express.Router(); // Create a new Express Router instance
 
+const authRouter = require('./auth');
+
+router.use('/auth', authRouter); 
 
 router.get('/', (req, res) => {
   res.send('Hello from the Backend!');
