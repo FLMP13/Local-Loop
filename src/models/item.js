@@ -1,5 +1,4 @@
 // This file defines the Mongoose schema for an item in the lending platform.
-
 const mongoose = require('mongoose');
 
 const itemSchema = new mongoose.Schema({
@@ -18,17 +17,33 @@ const itemSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: true
+        required: true,
+        enum: [
+            'Electronics',
+            'Furniture',
+            'Clothing',
+            'Books',
+            'Sports',
+            'Toys',
+            'Tools',
+            'Other'
+        ]
     },
     images: {
-        type: [String],
-        required: false,
-        default: []
+        type: [
+            {
+                data: Buffer,
+                contentType: String
+            }
+        ],
+        validate: [arr => arr.length <= 3, 'At most 3 images are allowed'],
+        default: [],
+        required: true
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: false // Change when implementing user authentication
     },
     availability: {
         type: Boolean,
@@ -37,4 +52,4 @@ const itemSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Item', itemSchema);
+module.exports = mongoose.model('Item', itemSchema); // Export the Item model based on the defined schema

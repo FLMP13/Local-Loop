@@ -6,9 +6,9 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-// Import routes and use them with the '/api' prefix
+// Import routes and use them
 const apiRouter = require('./routes/routes') // Import routes
-app.use('/api', apiRouter);
+app.use('/api', apiRouter); // Use the routes under the /api prefix to handle API requests 
 
 
 // Connect to MongoDB using the connectDB function
