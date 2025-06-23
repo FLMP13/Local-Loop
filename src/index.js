@@ -6,9 +6,13 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
+// Import routes and use them
+const apiRouter = require('./routes/routes') // Import routes
+app.use('/api', apiRouter); // Use the routes under the /api prefix to handle API requests 
 const mongoose = require('mongoose');
 // Make sure the User model is registered with mongoose
 require('./models/user');
+
 
 // Connect to MongoDB using the connectDB function
 connectDB()
