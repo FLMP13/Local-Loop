@@ -26,10 +26,10 @@ router.patch('/items/:id/status', updateItemStatus);
 
 router.get('/items/:id/image/:index', getItemImage);
 
-router.get('/items/:id', getItemById);
-
-// Add this route before the others to avoid conflicts
+// Place this BEFORE any /items/:id route!
 router.get('/items/mine', auth, getMyItems);
+
+router.get('/items/:id', getItemById); // This must come after /items/mine
 
 const authRouterPromise = require('./auth');
 const usersRouterPromise = require('./users');
