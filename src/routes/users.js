@@ -9,6 +9,8 @@ const User     = require('../models/user');
 
 const router = express.Router();
 
+// This should be a controller like item.controller.js
+
 (async () => {
   const storage = await gridFsStorage({ bucketName: 'profilePics' });
   const upload = multer({ storage });

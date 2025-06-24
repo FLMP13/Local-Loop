@@ -38,7 +38,7 @@ const itemSchema = new mongoose.Schema({
         ],
         validate: [arr => arr.length <= 3, 'At most 3 images are allowed'],
         default: [],
-        required: true
+        required: true //optional?
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
