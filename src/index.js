@@ -6,9 +6,6 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-// Import routes and use them
-const apiRouter = require('./routes/routes') // Import routes
-app.use('/api', apiRouter); // Use the routes under the /api prefix to handle API requests 
 const mongoose = require('mongoose');
 // Make sure the User model is registered with mongoose
 require('./models/user');
@@ -20,13 +17,13 @@ connectDB()
     // --- START OF ADDED INDEX-SYNC LOGIC ---
     try {
       const result = await mongoose.model('User').syncIndexes();
-      console.log('🔑 User indexes synced:', result);
+      console.log('User indexes synced:', result);
     } catch (err) {
-      console.error('❌ Error syncing User indexes:', err);
+      console.error('Error syncing User indexes:', err);
     }
 
     // Import routes and use them with the '/api' prefix
-    const apiRouter = require('./routes/routes') // Import routes
+    const apiRouter = await require('./routes/routes'); // Await the promise if routes.js is async
     app.use('/api', apiRouter);
 
     // --- END OF ADDED INDEX-SYNC LOGIC ---

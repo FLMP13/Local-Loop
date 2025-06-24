@@ -24,19 +24,24 @@ router.get('/items/:id/image/:index', getItemImage);
 
 router.get('/items/:id', getItemById);
 
-const authRouter = require('./auth');
-const usersRouter= require('./users');   
+const authRouterPromise = require('./auth');
+const usersRouterPromise = require('./users');
 
-router.use('/auth', authRouter); 
-router.use('/users', usersRouter);
+(async () => {
+  // Wait for routers to be ready (in case they use async multer/gridfs setup)
+  const authRouter = await authRouterPromise;
+  const usersRouter = await usersRouterPromise;
 
-router.get('/', (req, res) => {
-  res.send('Hello from the Backend!');
-});
+  router.use('/auth', authRouter);
+  router.use('/users', usersRouter);
 
-router.get('/test', (req, res) => {
-  res.json({ message: 'This is a test route to the Backend!' });
-});
+  router.get('/', (req, res) => {
+    res.send('Hello from the Backend!');
+  });
 
+  router.get('/test', (req, res) => {
+    res.json({ message: 'This is a test route to the Backend!' });
+  });
+})();
 
 module.exports = router;
