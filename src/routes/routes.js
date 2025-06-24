@@ -6,7 +6,8 @@ const Item = require('../models/item'); // Import the Item model
 const multer = require('multer'); // Import multer for handling file uploads
 const storage = multer.memoryStorage(); // Use memory storage for file uploads
 const upload = multer({ storage: storage, limits: { files: 3 } }); // Create a multer instance with the memory storage
-const { getAllItems, createItem, deleteItem, updateItem, getItemById, getItemImage} = require('../controllers/item.controller');
+const auth = require('../middleware/auth'); // Add this line if not present
+const { getAllItems, createItem, deleteItem, updateItem, getItemById, getItemImage, updateItemStatus, getMyItems } = require('../controllers/item.controller');
 
 // Get route to fetch all items using the controller function
 router.get('/items', getAllItems);
@@ -20,9 +21,15 @@ router.delete('/items/:id', deleteItem);
 // Put route to handle item updates by ID using the controller function
 router.put('/items/:id', updateItem);
 
+// Patch route to handle item status updates by ID using the controller function
+router.patch('/items/:id/status', updateItemStatus);
+
 router.get('/items/:id/image/:index', getItemImage);
 
 router.get('/items/:id', getItemById);
+
+// Add this route before the others to avoid conflicts
+router.get('/items/mine', auth, getMyItems);
 
 const authRouterPromise = require('./auth');
 const usersRouterPromise = require('./users');

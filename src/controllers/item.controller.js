@@ -84,3 +84,37 @@ export const getItemImage = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
+
+// Update the status of an item by ID
+export const updateItemStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const allowedStatuses = ['available', 'unavailable', 'requested', 'borrowed', 'lent', 'returned'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    const item = await Item.findByIdAndUpdate(id, { status }, { new: true });
+    if (!item) {
+      return res.status(404).json({ error: 'No Items found' });
+    }
+    res.status(200).json(item);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get all items owned by the logged-in user
+export const getMyItems = async (req, res) => {
+  try {
+    const filter = { owner: req.userId };
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+    const items = await Item.find(filter);
+    res.status(200).json(items);
+  } catch (error) {
+    console.error('getMyItems error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

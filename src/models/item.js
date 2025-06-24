@@ -20,10 +20,10 @@ const itemSchema = new mongoose.Schema({
         required: true,
         enum: [
             'Electronics',
-            'Furniture',
+            'Furniture', // Is that something to lend/borrow?
             'Clothing',
             'Books',
-            'Sports',
+            'Sports', // Is that something to lend/borrow?
             'Toys',
             'Tools',
             'Other'
@@ -43,12 +43,13 @@ const itemSchema = new mongoose.Schema({
     owner: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: false // Change when implementing user authentication
+        required: true 
     },
-    availability: {
-        type: Boolean,
+    status: {
+        type: String,
         required: true,
-        default: true
+        enum: ['available', 'unavailable', 'requested', 'borrowed', 'lent', 'returned'],
+        default: 'available'
     }
 });
 

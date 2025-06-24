@@ -20,10 +20,10 @@ const router = express.Router();
     upload.single('profilePic'),
     async (req, res) => {
       try {
-      // 1. Hash the password
+        // 1. Hash the password
         const hash = await bcrypt.hash(req.body.password, 10);
 
-      // 2. Build the user data
+        // 2. Build the user data
         const u = {
           firstName:    req.body.firstName,
           lastName:     req.body.lastName,
@@ -32,8 +32,8 @@ const router = express.Router();
           passwordHash: hash,
           zipCode:      req.body.zipCode,
           bio:          req.body.bio,
-        // 3. Save the ObjectId of the GridFS file:
-        profilePic:   req.file.id,
+          // 3. Save the ObjectId of the GridFS file:
+          profilePic:   req.file?.id,
         };
 
       // 4. Save in Mongo
@@ -71,7 +71,7 @@ const router = express.Router();
         expiresIn: '7d'                              // ← adjust as desired
         });
 
-      // 4. Return token & basic user info
+        // 4. Return token & basic user info
         res.json({
           message: 'Login successful',
           token, 
@@ -89,5 +89,16 @@ const router = express.Router();
     }
   );
 })();
+
+exports.getMyItems = async (req, res) => {
+  console.log('getMyItems called, userId:', req.userId);
+  try {
+    const items = await Item.find({ owner: req.userId });
+    res.status(200).json(items);
+  } catch (error) {
+    console.error('getMyItems error:', error); 
+    res.status(500).json({ error: error.message });
+  }
+};
 
 module.exports = router;
