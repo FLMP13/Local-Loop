@@ -1,10 +1,10 @@
 // Controller Functions for Item Management
 import Item from '../models/item.js'; // Import Item model
 
-// Get all items and return them as JSON
+// Get all items and return them as JSON while populating owner details
 export const getAllItems = async (req, res) => {
   try {
-    const items = await Item.find();
+    const items = await Item.find().populate('owner', 'firstName lastName');
     res.status(200).json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -20,6 +20,7 @@ export const createItem = async (req, res) => {
     }));
     const item = new Item({
       ...req.body,
+      owner: req.userId,
       images
     });
     await item.save();
@@ -60,7 +61,10 @@ export const updateItem = async (req, res) => {
 // Get an item by ID and return it as JSON, excluding image data
 export const getItemById = async (req, res) => {
   try {
-    const item = await Item.findById(req.params.id).lean();
+    const item = await Item
+      .findById(req.params.id).lean()
+      .populate('owner', 'firstName lastName')
+      .lean();
     if (!item) {
       return res.status(404).json({ error: 'Item not found' });
     }
@@ -111,7 +115,7 @@ export const getMyItems = async (req, res) => {
     if (req.query.status) {
       filter.status = req.query.status;
     }
-    const items = await Item.find(filter);
+    const items = await Item.find(filter).populate('owner', 'firstName lastName');
     res.status(200).json(items);
   } catch (error) {
     console.error('getMyItems error:', error);

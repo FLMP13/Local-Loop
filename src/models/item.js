@@ -20,10 +20,10 @@ const itemSchema = new mongoose.Schema({
         required: true,
         enum: [
             'Electronics',
-            'Furniture', // Is that something to lend/borrow?
+            'Furniture', // Is that something to lend/borrow? // NO :) needs to be adapted for the whole list
             'Clothing',
             'Books',
-            'Sports', // Is that something to lend/borrow?
+            'Sports', // Is that something to lend/borrow? // NO :) needs to be adapted for the whole list
             'Toys',
             'Tools',
             'Other'
@@ -38,7 +38,7 @@ const itemSchema = new mongoose.Schema({
         ],
         validate: [arr => arr.length <= 3, 'At most 3 images are allowed'],
         default: [],
-        required: true //optional?
+        required: true //optional? No at least one image should be required i guess
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
