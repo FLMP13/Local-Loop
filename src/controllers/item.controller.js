@@ -1,7 +1,8 @@
 // Controller Functions for Item Management
 import Item from '../models/item.js'; // Import Item model
 
-// Get all items and return them as JSON while populating owner details
+// Get all items and return them as JSON while populating owner details and sorting by price
+// Supports filtering by category, price range, search term, and sorting options
 export const getAllItems = async (req, res) => {
   try {
     const { category, minPrice, maxPrice, search, sort } = req.query;
