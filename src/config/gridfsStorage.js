@@ -4,7 +4,10 @@ const mongoose = require('mongoose');
 
 class GridFsStorage {
   constructor(opts) {
-    // ← pick up your mongoose connection's native driver DB
+    // Wait until the mongoose connection is open before creating the bucket
+    if (!mongoose.connection.db) {
+      throw new Error('MongoDB connection is not ready. Please ensure the connection is established before using GridFsStorage.');
+    }
     this.bucket = new GridFSBucket(mongoose.connection.db, {
       bucketName: opts.bucketName || 'uploads'
     });
@@ -17,7 +20,6 @@ class GridFsStorage {
       contentType: file.mimetype
     });
 
-    // pipe the incoming file stream into GridFS
     file.stream
       .pipe(uploadStream)
       .on('error', err => cb(err))
@@ -39,4 +41,14 @@ class GridFsStorage {
   }
 }
 
-module.exports = opts => new GridFsStorage(opts);
+// Export a factory that waits for the connection to be ready
+module.exports = async (opts) => {
+  if (!mongoose.connection.db) {
+    // Wait for the connection to open if not ready
+    await new Promise((resolve, reject) => {
+      mongoose.connection.once('open', resolve);
+      mongoose.connection.once('error', reject);
+    });
+  }
+  return new GridFsStorage(opts);
+};

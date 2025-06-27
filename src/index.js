@@ -1,36 +1,31 @@
-// Import express, connectDB function, and dotenv for environment variables
-const express = require('express');
-const connectDB = require('./config/db');
+const express   = require('express');
+const mongoose  = require('mongoose');
 require('dotenv').config();
+require('./models/user');           // register User model
+const connectDB = require('./config/db');
+const apiRouter = require('./routes/index.routes'); // import the main API router which includes all other routers from auth, users, and items
 
 const app = express();
 app.use(express.json());
+app.use('/api', apiRouter); // mount the main API router on the /api path
 
-const mongoose = require('mongoose');
-// Make sure the User model is registered with mongoose
-require('./models/user');
-
-// Connect to MongoDB using the connectDB function
 connectDB()
   .then(async () => {
-    // --- START OF ADDED INDEX-SYNC LOGIC ---
-    try {
-      const result = await mongoose.model('User').syncIndexes();
-      console.log('🔑 User indexes synced:', result);
-    } catch (err) {
-      console.error('❌ Error syncing User indexes:', err);
-    }
+    console.log('MongoDB connected');
+    await mongoose.model('User').syncIndexes(); // ensure indexes are created for the User model
 
-    // Import routes and use them with the '/api' prefix
-    const apiRouter = require('./routes/routes') // Import routes
-    app.use('/api', apiRouter);
-
-    // --- END OF ADDED INDEX-SYNC LOGIC ---
+    // global error handler
+    app.use((err, req, res, next) => {
+      console.error(err);
+      res
+        .status(err.status || 500)
+        .json({ error: err.message || 'Server error' });
+    });
 
     app.listen(process.env.PORT, () => {
-      console.log(`Backend listening on http://localhost:${process.env.PORT}`);
+      console.log(`Server listening on http://localhost:${process.env.PORT}`);
     });
   })
   .catch(err => {
-    console.error('MongoDB connection error:', err);
+    console.error('Failed to connect to MongoDB:', err);
   });

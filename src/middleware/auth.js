@@ -1,6 +1,7 @@
 // src/middleware/auth.js
 const jwt = require('jsonwebtoken');
 
+// Middleware to authenticate requests using JWT by verifying the token and attaching the user ID to the request object
 module.exports = function(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'No token provided' }); // enforce auth
