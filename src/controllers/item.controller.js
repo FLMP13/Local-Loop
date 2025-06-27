@@ -4,7 +4,24 @@ import Item from '../models/item.js'; // Import Item model
 // Get all items and return them as JSON while populating owner details
 export const getAllItems = async (req, res) => {
   try {
-    const items = await Item.find().populate('owner', 'firstName lastName');
+    const { category, minPrice, maxPrice, search, sort } = req.query;
+    const filter = {};
+
+    if (category) filter.category = category;
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = parseFloat(minPrice);
+      if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+    }
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' }; // case-insensitive
+    }
+
+    let sortOption = {};
+    if (sort === 'price_asc')  sortOption.price = 1;
+    else if (sort === 'price_desc') sortOption.price = -1;
+
+    const items = await Item.find(filter).sort(sortOption).populate('owner', 'firstName lastName');
     res.status(200).json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
