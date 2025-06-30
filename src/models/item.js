@@ -45,6 +45,17 @@ const itemSchema = new mongoose.Schema({
         ref: 'User',
         required: true 
     },
+    location: {
+    type: { 
+      type: String, 
+      enum: ['Point'], 
+      required: true 
+    },
+    coordinates: {
+      type: [Number],   // [longitude, latitude]
+      required: true
+    }
+  },
     status: {
         type: String,
         required: true,
@@ -52,5 +63,8 @@ const itemSchema = new mongoose.Schema({
         default: 'available'
     }
 });
+
+// create a 2dsphere index on location
+itemSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Item', itemSchema); // Export the Item model based on the defined schema
