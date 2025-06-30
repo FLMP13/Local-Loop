@@ -1,4 +1,4 @@
-// filepath: c:\Users\julia\seba\Backend\src\controllers\user.controller.js
+// \Backend\src\controllers\user.controller.js
 // Import user model and necessary libraries
 const User     = require('../models/user');
 const bcrypt   = require('bcrypt');
