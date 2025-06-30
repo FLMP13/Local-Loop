@@ -9,7 +9,8 @@ const {
   updateItem,
   deleteItem,
   updateItemStatus,
-  getMyItems
+  getMyItems,
+  getNearbyItems
 } = require('../controllers/item.controller'); // Use controller functions for item operations
 
 const router = express.Router();
@@ -17,6 +18,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { files: 3 } })
 
 // public
 router.get('/mine',          auth, getMyItems); // Get items owned by the authenticated user
+router.get('/nearby',        auth, getNearbyItems);   // Items within radius (km)
 router.get('/:id/image/:index', getItemImage); // Get specific image of an item by index
 router.get('/:id',           getItemById); // Get item by ID
 router.get('/',              getAllItems); // Get all items
