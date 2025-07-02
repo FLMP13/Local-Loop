@@ -1,9 +1,9 @@
-const bcrypt = require('bcrypt');
-const jwt    = require('jsonwebtoken');
-const User   = require('../models/user');
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import User from '../models/user.js';
 
 // Signup function to create a new user and hash the password
-exports.signup = async (req, res, next) => {
+export async function signup(req, res, next) {
   try {
     const hash = await bcrypt.hash(req.body.password, 10);
     const user = await User.create({
@@ -15,10 +15,10 @@ exports.signup = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-};
+}
 
 // Login function to authenticate a user and return a JWT token
-exports.login = async (req, res, next) => {
+export async function login(req, res, next) {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
@@ -31,4 +31,4 @@ exports.login = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-};
+}

@@ -1,19 +1,11 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const zipCodeSchema = new mongoose.Schema({
-  zipCode: {
-    type: String,
-    required: true,
-    unique: true               // ensure one entry per ZIP
-  },
-  latitude: {
-    type: Number,
-    required: true
-  },
-  longitude: {
-    type: Number,
-    required: true
-  }
+  zipCode: { type: String, required: true, unique: true },
+  latitude: { type: Number, required: true },
+  longitude: { type: Number, required: true }
 });
 
-module.exports = mongoose.model('ZipCode', zipCodeSchema);
+const ZipCode = mongoose.model('ZipCode', zipCodeSchema);
+
+export default ZipCode;

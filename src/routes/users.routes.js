@@ -1,24 +1,25 @@
-const express       = require('express');
-const auth          = require('../middleware/auth');
-const gridFsFactory = require('../config/gridfsStorage');
-const multer        = require('multer');
-const {
+import express from 'express';
+import auth from '../middleware/auth.js';
+import gridFsFactory from '../config/gridfsStorage.js';
+import multer from 'multer';
+import {
   getMe,
   getAvatar,
   updateMe,
   changePassword
-} = require('../controllers/user.controller'); // Use controller functions for user operations
+} from '../controllers/user.controller.js';
 
 const router = express.Router();
 
-(async () => {
-  const storage = await gridFsFactory({ bucketName: 'profilePics' }); // Create a GridFS storage instance for profile pictures
-  const upload  = multer({ storage }); // Configure multer to use GridFS storage
+const setupRoutes = async () => {
+  const storage = await gridFsFactory({ bucketName: 'profilePics' });
+  const upload = multer({ storage });
 
-  router.get( '/me',          auth, getMe); // Get the currently logged-in user's details
-  router.get( '/me/avatar',   auth, getAvatar); // Get the avatar of the currently logged-in user
-  router.put( '/me',          auth, upload.single('avatar'), updateMe); // Update the currently logged-in user's details with optional avatar upload
-  router.put( '/me/password', auth, changePassword); // Change the password of the currently logged-in user
-})();
+  router.get('/me', auth, getMe);
+  router.get('/me/avatar', auth, getAvatar);
+  router.put('/me', auth, upload.single('avatar'), updateMe);
+  router.put('/me/password', auth, changePassword);
+};
+setupRoutes();
 
-module.exports = router;
+export default router;

@@ -1,6 +1,6 @@
 // This file defines the User model for MongoDB using Mongoose.
 
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   firstName:   { type: String, required: true },
@@ -17,4 +17,6 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ email:    1 }, { unique: true });
 userSchema.index({ nickname: 1 }, { unique: true });
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+
+export default User;

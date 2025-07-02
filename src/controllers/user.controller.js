@@ -1,11 +1,11 @@
 // \Backend\src\controllers\user.controller.js
 // Import user model and necessary libraries
-const User     = require('../models/user');
-const bcrypt   = require('bcrypt');
-const mongoose = require('mongoose');
+import User from '../models/user.js';
+import bcrypt from 'bcrypt';
+import mongoose from 'mongoose';
 
 // Function to get the currently logged-in user's details
-exports.getMe = async (req, res) => {
+export async function getMe(req, res) {
   try {
     const user = await User.findById(req.userId).select('-passwordHash -__v');
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -14,10 +14,10 @@ exports.getMe = async (req, res) => {
     console.error('getMe error:', err);
     res.status(500).json({ error: 'Server error' });
   }
-};
+}
 
 // Function to get the avatar of the currently logged-in user
-exports.getAvatar = async (req, res) => {
+export async function getAvatar(req, res) {
   try {
     const user = await User.findById(req.userId).select('profilePic');
     if (!user || !user.profilePic) return res.status(404).end();
@@ -32,10 +32,10 @@ exports.getAvatar = async (req, res) => {
     console.error('getAvatar error:', err);
     res.status(500).end();
   }
-};
+}
 
 // Function to update the currently logged-in user's details
-exports.updateMe = async (req, res) => {
+export async function updateMe(req, res) {
   try {
     const updates = {};
     for (let field of ['nickname','email','zipCode','bio']) {
@@ -54,10 +54,10 @@ exports.updateMe = async (req, res) => {
     console.error('updateMe error:', err);
     res.status(400).json({ error: err.message });
   }
-};
+}
 
 // Function to change the password of the currently logged-in user
-exports.changePassword = async (req, res) => {
+export async function changePassword(req, res) {
   try {
     const { oldPassword, newPassword } = req.body;
     if (!oldPassword || !newPassword) {
@@ -77,4 +77,4 @@ exports.changePassword = async (req, res) => {
     console.error('changePassword error:', err);
     res.status(500).json({ error: 'Server error' });
   }
-};
+}

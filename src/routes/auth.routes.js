@@ -1,15 +1,16 @@
-const express       = require('express');
-const multer        = require('multer');
-const gridFsFactory = require('../config/gridfsStorage');
-const { signup, login } = require('../controllers/auth.controller'); // Use controller functions for signup and login
+import express from 'express';
+import multer from 'multer';
+import gridFsFactory from '../config/gridfsStorage.js';
+import { signup, login } from '../controllers/auth.controller.js';
 
 const router = express.Router();
 
-(async () => {
-  const storage = await gridFsFactory({ bucketName: 'profilePics' }); // Create a GridFS storage instance for profile pictures
-  const upload  = multer({ storage }); // Configure multer to use GridFS storage
-  router.post('/signup', upload.single('profilePic'), signup); // Handle user signup with profile picture upload
-  router.post('/login',  login); // Handle user login
-})();
+const setupRoutes = async () => {
+  const storage = await gridFsFactory({ bucketName: 'profilePics' });
+  const upload = multer({ storage });
+  router.post('/signup', upload.single('profilePic'), signup);
+  router.post('/login', login);
+};
+setupRoutes();
 
-module.exports = router;
+export default router;

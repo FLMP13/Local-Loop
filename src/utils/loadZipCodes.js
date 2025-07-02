@@ -1,12 +1,15 @@
-// src/utils/loadZipCodes.js
-const fs      = require('fs');
-const path    = require('path');
-const csv     = require('csv-parser');
-const connect = require('../config/db');    
-const ZipCode = require('../models/zipCode');
+import fs from 'fs';
+import path from 'path';
+import csv from 'csv-parser';
+import { fileURLToPath } from 'url';
+import connect from '../config/db.js';
+import ZipCode from '../models/zipCode.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function loadZipCodes() {
-  await connect();                           
+  await connect();
   const rows = [];
   fs.createReadStream(path.join(__dirname, '../../data/zip_centroids.csv'))
     .pipe(csv())
@@ -19,7 +22,7 @@ async function loadZipCodes() {
     })
     .on('end', async () => {
       try {
-        await ZipCode.deleteMany({});        // clear any old data
+        await ZipCode.deleteMany({});
         await ZipCode.insertMany(rows);
         console.log(`Inserted ${rows.length} ZIP centroids`);
         process.exit(0);
@@ -30,9 +33,9 @@ async function loadZipCodes() {
     });
 }
 
-// If run via `node loadZipCodes.js`, invoke automatically:
-if (require.main === module) {
+// If run directly: node loadZipCodes.js
+if (process.argv[1] === __filename) {
   loadZipCodes();
 }
 
-module.exports = loadZipCodes; // allow import elsewhere
+export default loadZipCodes;

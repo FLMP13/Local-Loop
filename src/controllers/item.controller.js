@@ -2,6 +2,7 @@
 import Item from '../models/item.js'; // Import Item model
 import ZipCode from '../models/zipCode.js'; // Import ZipCode model
 import User from '../models/user.js';
+import { getDistanceFromZip } from '../utils/yourDistanceUtil.js';
 
 // Helper to get GeoJSON Point from a ZIP code
 async function getLocationFromZip(zipCode) {
@@ -38,8 +39,26 @@ export const getAllItems = async (req, res) => {
     if (sort === 'price_asc')  sortOption.price = 1;
     else if (sort === 'price_desc') sortOption.price = -1;
 
-    const items = await Item.find(filter).sort(sortOption).populate('owner', 'firstName lastName');
-    res.status(200).json(items);
+    const items = await Item.find(filter)
+      .sort(sortOption)
+      .populate('owner', 'firstName lastName nickname email zipCode');
+
+    // Fetch the user's zip code from the DB if logged in
+    let userZip = null;
+    if (req.userId) {
+      const user = await User.findById(req.userId);
+      userZip = user?.zipCode;
+    }
+
+    const itemsWithDistance = await Promise.all(items.map(async item => {
+      let distance = null;
+      if (userZip && item.owner?.zipCode) {
+        distance = await getDistanceFromZip(userZip, item.owner.zipCode);
+      }
+      return { ...item.toObject(), distance };
+    }));
+
+    res.json(itemsWithDistance);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -105,14 +124,21 @@ export const updateItem = async (req, res) => {
 export const getItemById = async (req, res) => {
   try {
     const item = await Item
-      .findById(req.params.id).lean()
-      .populate('owner', 'firstName lastName')
+      .findById(req.params.id)
+      .populate('owner', 'firstName lastName nickname email zipCode')
       .lean();
-    if (!item) {
-      return res.status(404).json({ error: 'Item not found' });
+
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    let distance = null;
+    if (req.userId && item.owner?.zipCode) {
+      const user = await User.findById(req.userId, 'zipCode');
+      if (user?.zipCode) {
+        distance = await getDistanceFromZip(user.zipCode, item.owner.zipCode);
+      }
     }
-    item.images = item.images ? item.images.map(img => ({})) : [];
-    res.status(200).json(item);
+
+    res.json({ ...item, distance });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -158,7 +184,7 @@ export const getMyItems = async (req, res) => {
     if (req.query.status) {
       filter.status = req.query.status;
     }
-    const items = await Item.find(filter).populate('owner', 'firstName lastName');
+    const items = await Item.find(filter).populate('owner', 'firstName lastName nickname email zipCode');
     res.status(200).json(items);
   } catch (error) {
     console.error('getMyItems error:', error);
@@ -214,9 +240,22 @@ export const getNearbyItems = async (req, res) => {
     const items = await Item
       .find(filter)
       .sort(sortOption)
-      .populate('owner', 'firstName lastName');
+      .populate('owner', 'firstName lastName nickname email zipCode');
 
-    res.status(200).json(items);
+    const user = await User.findById(req.userId, 'zipCode');
+    const userZip = user?.zipCode;
+
+    const itemsWithDistance = await Promise.all(items.map(async item => {
+      let distance = null;
+      if (userZip && item.owner?.zipCode) {
+        distance = await getDistanceFromZip(userZip, item.owner.zipCode);
+      }
+      return {
+        ...item.toObject(),
+        distance,
+      };
+    }));
+    res.json(itemsWithDistance);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

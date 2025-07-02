@@ -1,5 +1,6 @@
+import mongoose from 'mongoose';
+
 // This file defines the Mongoose schema for an item in the lending platform.
-const mongoose = require('mongoose');
 
 const itemSchema = new mongoose.Schema({
     title: {
@@ -67,4 +68,6 @@ const itemSchema = new mongoose.Schema({
 // create a 2dsphere index on location
 itemSchema.index({ location: '2dsphere' });
 
-module.exports = mongoose.model('Item', itemSchema); // Export the Item model based on the defined schema
+const Item = mongoose.model('Item', itemSchema);
+
+export default Item;
