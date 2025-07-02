@@ -1,6 +1,6 @@
 // src/config/gridfsStorage.js
-const { GridFSBucket } = require('mongodb');
-const mongoose = require('mongoose');
+import { GridFSBucket } from 'mongodb';
+import mongoose from 'mongoose';
 
 class GridFsStorage {
   constructor(opts) {
@@ -42,7 +42,7 @@ class GridFsStorage {
 }
 
 // Export a factory that waits for the connection to be ready
-module.exports = async (opts) => {
+const gridFsFactory = async (opts) => {
   if (!mongoose.connection.db) {
     // Wait for the connection to open if not ready
     await new Promise((resolve, reject) => {
@@ -52,3 +52,5 @@ module.exports = async (opts) => {
   }
   return new GridFsStorage(opts);
 };
+
+export default gridFsFactory;

@@ -1,5 +1,6 @@
+import mongoose from 'mongoose';
+
 // This file defines the Mongoose schema for an item in the lending platform.
-const mongoose = require('mongoose');
 
 const itemSchema = new mongoose.Schema({
     title: {
@@ -45,6 +46,17 @@ const itemSchema = new mongoose.Schema({
         ref: 'User',
         required: true 
     },
+    location: {
+    type: { 
+      type: String, 
+      enum: ['Point'], 
+      required: true 
+    },
+    coordinates: {
+      type: [Number],   // [longitude, latitude]
+      required: true
+    }
+  },
     status: {
         type: String,
         required: true,
@@ -53,4 +65,9 @@ const itemSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Item', itemSchema); // Export the Item model based on the defined schema
+// create a 2dsphere index on location
+itemSchema.index({ location: '2dsphere' });
+
+const Item = mongoose.model('Item', itemSchema);
+
+export default Item;
