@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema({
   bio:         { type: String, required: false },
   profilePic:  { type: mongoose.Schema.Types.ObjectId, ref: 'profilePics.files', required: false },
   subscription:{ type: String, enum: ['free','premium'], default: 'free' },
+  lenderRating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 }},
+  borrowerRating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 }}
 }, { timestamps: true });
 
 userSchema.index({ email:    1 }, { unique: true });
