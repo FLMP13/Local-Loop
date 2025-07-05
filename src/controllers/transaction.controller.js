@@ -126,3 +126,39 @@ export async function declineTransaction(req, res) {
     res.status(500).json({ error: 'Failed to decline transaction.' });
   }
 }
+
+//Get payment summaries for transactions
+// This function retrieves a summary of transactions for a specific user
+export async function getPaymentSummary(req, res) {
+  try {
+    const transaction = await Transaction.findById(req.params.id)
+      .populate('item', 'title price')
+      .populate('lender', 'firstName lastName')
+      .populate('borrower', 'firstName lastName');
+
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    //Has each user access to the transaction
+    if (transaction.lender._id.toString() !== req.userId && transaction.borrower._id.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized to view this transaction.' });
+    }
+
+    const summary = {
+      id: transaction._id,
+      borrower: transaction.borrower.firstName + ' ' + transaction.borrower.lastName, 
+      itemTitle: transaction.item.title,
+      itemPrice: transaction.item.price,
+      lender: transaction.lender.firstName + ' ' + transaction.lender.lastName,
+      status: transaction.status,
+      requestDate: transaction.requestDate
+    };
+  
+    // Return the summary
+    res.json(summary);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch transaction summary.' });
+  }
+}
