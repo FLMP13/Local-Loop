@@ -126,3 +126,29 @@ export async function declineTransaction(req, res) {
     res.status(500).json({ error: 'Failed to decline transaction.' });
   }
 }
+
+export async function completeTransaction(req, res) {
+  try {
+    const transaction = await Transaction.findById(req.params.id).populate('item');
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    
+    // Only borrower can mark as completed (Do we want to keep it like this or change it to lender?)
+    // My thinking was, that this way the borrower will be more likely to return the item on time as he will not get his deposit back if he does not return the item on time.
+    if (transaction.borrower.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    transaction.status = 'completed';
+    transaction.returnDate = new Date();
+    await transaction.save();
+
+    if (transaction.item) {
+      transaction.item.status = 'available';
+      await transaction.item.save();
+    }
+
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to complete transaction.' });
+  }
+}
