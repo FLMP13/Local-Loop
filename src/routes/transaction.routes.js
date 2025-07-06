@@ -5,7 +5,8 @@ import {
   getMyLendings,
   getTransactionById,
   acceptTransaction,
-  declineTransaction
+  declineTransaction,
+  completeTransaction
 } from '../controllers/transaction.controller.js';
 import auth from '../middleware/auth.js';
 
@@ -17,5 +18,6 @@ router.get('/transactions/lendings', auth, getMyLendings);
 router.get('/transactions/:id', auth, getTransactionById);
 router.patch('/transactions/:id/accept', auth, acceptTransaction);
 router.patch('/transactions/:id/decline', auth, declineTransaction);
+router.patch('/transactions/:id/complete', auth, completeTransaction);
 
 export default router;
