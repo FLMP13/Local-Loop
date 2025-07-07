@@ -145,12 +145,17 @@ export async function getPaymentSummary(req, res) {
       return res.status(403).json({ error: 'Not authorized to view this transaction.' });
     }
 
+    // Debug: Log the populated data
+    console.log('Transaction lender:', transaction.lender);
+    console.log('Transaction borrower:', transaction.borrower);
+    console.log('Transaction item:', transaction.item);
+
     const summary = {
       id: transaction._id,
-      borrower: transaction.borrower.firstName + ' ' + transaction.borrower.lastName, 
-      itemTitle: transaction.item.title,
-      itemPrice: transaction.item.price,
-      lender: transaction.lender.firstName + ' ' + transaction.lender.lastName,
+      borrower: transaction.borrower ? (transaction.borrower.firstName + ' ' + transaction.borrower.lastName) : 'Unknown Borrower', 
+      itemTitle: transaction.item ? transaction.item.title : 'Unknown Item',
+      itemPrice: transaction.item ? transaction.item.price : 0,
+      lender: transaction.lender ? (transaction.lender.firstName + ' ' + transaction.lender.lastName) : 'Unknown Lender',
       status: transaction.status,
       requestDate: transaction.requestDate
     };
@@ -160,5 +165,28 @@ export async function getPaymentSummary(req, res) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch transaction summary.' });
+  }
+}
+
+// Update transaction status after payment completion
+export async function completePayment(req, res) {
+  try {
+    const transaction = await Transaction.findById(req.params.id).populate('item');
+    
+    if (!transaction || transaction.borrower.toString() !== req.userId) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    transaction.status = 'borrowed';
+    await transaction.save();
+
+    if (transaction.item) {
+      transaction.item.status = 'borrowed';
+      await transaction.item.save();
+    }
+
+    res.json({ message: 'Payment completed', status: 'borrowed' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to complete payment' });
   }
 }
