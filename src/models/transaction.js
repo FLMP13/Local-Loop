@@ -8,7 +8,7 @@ const transactionSchema = new mongoose.Schema({
     type: String,
     enum: [
       'requested', 'accepted', 'rejected', 'borrowed', 'returned', 'completed',
-      'renegotiation_requested'
+      'renegotiation_requested', 'retracted'
     ],
     default: 'requested'
   },
@@ -23,7 +23,10 @@ const transactionSchema = new mongoose.Schema({
   lenderMessage: { type: String },   // for decline/renegotiation
   borrowerMessage: { type: String }, // for renegotiation response
   lenderReviewed: { type: Boolean, default: false },
-  borrowerReviewed: { type: Boolean, default: false }
+  borrowerReviewed: { type: Boolean, default: false },
+  returnCode: { type: String },
+  returnCodeGenerated: { type: Boolean, default: false },
+  returnCodeUsed: { type: Boolean, default: false },
 });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

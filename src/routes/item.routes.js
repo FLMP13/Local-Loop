@@ -10,7 +10,8 @@ import {
   deleteItem,
   updateItemStatus,
   getMyItems,
-  getNearbyItems
+  getNearbyItems,
+  getUnavailablePeriods
 } from '../controllers/item.controller.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.get('/nearby',        auth, getNearbyItems);   // Items within radius (km
 router.get('/:id/image/:index', getItemImage); // Get specific image of an item by index
 router.get('/:id',           getItemById); // Get item by ID
 router.get('/',              auth, getAllItems); // Get all items
+router.get('/:id/unavailable', getUnavailablePeriods); // Get unavailable periods of an item by ID
 
 // protected
 router.post('/',             auth, upload.array('images', 3), createItem); // Create a new item with images as authenticated user

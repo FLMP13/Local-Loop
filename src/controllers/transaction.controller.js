@@ -1,5 +1,6 @@
 import Transaction from '../models/transaction.js';
 import Item from '../models/item.js';
+import crypto from 'crypto';
 
 // Request to borrow/lend an item
 export async function requestLend(req, res) {
@@ -15,6 +16,20 @@ export async function requestLend(req, res) {
     // Prevent owner from requesting their own item
     if (item.owner.toString() === req.userId) {
       return res.status(400).json({ error: 'You cannot request your own item.' });
+    }
+
+    const overlapping = await Transaction.findOne({
+      item: req.body.item,
+      status: { $in: ['accepted', 'borrowed'] },
+      $or: [
+        {
+          requestedFrom: { $lte: req.body.requestedTo },
+          requestedTo: { $gte: req.body.requestedFrom }
+        }
+      ]
+    });
+    if (overlapping) {
+      return res.status(400).json({ error: 'This time slot is already booked.' });
     }
 
     const transaction = await Transaction.create({
@@ -227,3 +242,106 @@ export async function declineRenegotiation(req, res) {
     res.status(500).json({ error: 'Failed to decline renegotiation.' });
   }
 }
+
+// Edit transaction (borrower can change time/message if not completed/returned/rejected)
+export const editTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { requestedFrom, requestedTo, message } = req.body;
+    const transaction = await Transaction.findById(id);
+
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    if (transaction.borrower.toString() !== req.userId)
+      return res.status(403).json({ error: 'Not authorized' });
+    if (['completed', 'returned', 'rejected', 'retracted'].includes(transaction.status))
+      return res.status(400).json({ error: 'Cannot edit this transaction' });
+
+    transaction.requestedFrom = requestedFrom;
+    transaction.requestedTo = requestedTo;
+    if (message !== undefined) transaction.message = message;
+    await transaction.save();
+
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Retract transaction (borrower can retract if not completed/returned/rejected)
+export const retractTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const transaction = await Transaction.findById(id);
+
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    if (transaction.borrower.toString() !== req.userId)
+      return res.status(403).json({ error: 'Not authorized' });
+    if (['completed', 'returned', 'rejected'].includes(transaction.status))
+      return res.status(400).json({ error: 'Cannot retract this transaction' });
+
+    transaction.status = 'retracted';
+    await transaction.save();
+
+    res.json({ message: 'Transaction retracted', transaction });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Generate return code for a transaction
+export const generateReturnCode = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.userId; // FIXED
+  const tx = await Transaction.findById(id);
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  if (tx.lender.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
+  if (tx.status !== 'borrowed') return res.status(400).json({ error: 'Not in borrowed state' });
+
+  // Generate code if not already generated
+  if (!tx.returnCodeGenerated) {
+    tx.returnCode = crypto.randomBytes(3).toString('hex').toUpperCase(); // e.g. "A1B2C3"
+    tx.returnCodeGenerated = true;
+    await tx.save();
+  }
+  res.json({ code: tx.returnCode });
+};
+
+// Submit return code to complete the transaction
+export const submitReturnCode = async (req, res) => {
+  const { id } = req.params;
+  const { code } = req.body;
+  const userId = req.userId; // FIXED
+  const tx = await Transaction.findById(id);
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  if (tx.borrower.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
+  if (tx.status !== 'borrowed') return res.status(400).json({ error: 'Not in borrowed state' });
+
+  if (!tx.returnCodeGenerated || !tx.returnCode) {
+    return res.status(400).json({ error: 'Return code not generated yet.' });
+  }
+  if (tx.returnCodeUsed) {
+    return res.status(400).json({ error: 'Return code already used.' });
+  }
+  if (tx.returnCode !== code) {
+    return res.status(400).json({ error: 'Incorrect code.' });
+  }
+
+  tx.status = 'completed';
+  tx.returnCodeUsed = true;
+  await tx.save();
+  res.json({ success: true });
+};
+
+export const forceCompleteReturn = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.userId; // FIXED
+  const tx = await Transaction.findById(id);
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  if (tx.lender.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
+  if (tx.status !== 'borrowed') return res.status(400).json({ error: 'Not in borrowed state' });
+
+  tx.status = 'completed';
+  tx.returnCodeUsed = true;
+  await tx.save();
+  res.json({ success: true });
+};

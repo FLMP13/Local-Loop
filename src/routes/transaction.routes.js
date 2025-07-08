@@ -10,7 +10,12 @@ import {
   completeTransaction,
   renegotiateTransaction,
   acceptRenegotiation,
-  declineRenegotiation
+  declineRenegotiation,
+  editTransaction,
+  retractTransaction,
+  generateReturnCode,
+  submitReturnCode,
+  forceCompleteReturn
 } from '../controllers/transaction.controller.js';
 
 const router = express.Router();
@@ -25,5 +30,10 @@ router.patch('/:id/complete', auth, completeTransaction);
 router.patch('/:id/renegotiate', auth, renegotiateTransaction);
 router.patch('/:id/renegotiation/accept', auth, acceptRenegotiation);
 router.patch('/:id/renegotiation/decline', auth, declineRenegotiation);
+router.patch('/:id/edit', auth, editTransaction);
+router.patch('/:id/retract', auth, retractTransaction);
+router.patch('/:id/return-code', auth, generateReturnCode);
+router.post('/:id/return-code', auth, submitReturnCode);
+router.patch('/:id/return-complete', auth, forceCompleteReturn);
 
 export default router;

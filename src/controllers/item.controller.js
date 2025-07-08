@@ -1,6 +1,7 @@
 import Item from '../models/item.js';
 import ZipCode from '../models/zipCode.js';
 import User from '../models/user.js';
+import Transaction from '../models/transaction.js';
 import { getDistanceFromZip } from '../utils/yourDistanceUtil.js';
 
 // This function looks up the ZIP code in the database and returns its coordinates
@@ -290,5 +291,25 @@ export const getNearbyItems = async (req, res) => {
     res.json(itemsWithDistance);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
+// Get unavailable periods for an item based on its transactions
+export const getUnavailablePeriods = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Find all accepted or borrowed transactions for this item
+    const transactions = await Transaction.find({
+      item: id,
+      status: { $in: ['accepted', 'borrowed'] }
+    });
+    // Map to periods
+    const periods = transactions.map(t => ({
+      from: t.requestedFrom,
+      to: t.requestedTo
+    }));
+    res.json(periods);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch unavailable periods.' });
   }
 };
