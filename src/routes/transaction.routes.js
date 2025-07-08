@@ -1,4 +1,5 @@
 import express from 'express';
+import auth from '../middleware/auth.js';
 import {
   requestLend,
   getMyBorrowings,
@@ -6,18 +7,23 @@ import {
   getTransactionById,
   acceptTransaction,
   declineTransaction,
-  completeTransaction
+  completeTransaction,
+  renegotiateTransaction,
+  acceptRenegotiation,
+  declineRenegotiation
 } from '../controllers/transaction.controller.js';
-import auth from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.post('/transactions/request', auth, requestLend);
-router.get('/transactions/borrowings', auth, getMyBorrowings);
-router.get('/transactions/lendings', auth, getMyLendings);
-router.get('/transactions/:id', auth, getTransactionById);
-router.patch('/transactions/:id/accept', auth, acceptTransaction);
-router.patch('/transactions/:id/decline', auth, declineTransaction);
-router.patch('/transactions/:id/complete', auth, completeTransaction);
+router.post('/request', auth, requestLend);
+router.get('/borrowings', auth, getMyBorrowings);
+router.get('/lendings', auth, getMyLendings);
+router.get('/:id', auth, getTransactionById);
+router.patch('/:id/accept', auth, acceptTransaction);
+router.patch('/:id/decline', auth, declineTransaction);
+router.patch('/:id/complete', auth, completeTransaction);
+router.patch('/:id/renegotiate', auth, renegotiateTransaction);
+router.patch('/:id/renegotiation/accept', auth, acceptRenegotiation);
+router.patch('/:id/renegotiation/decline', auth, declineRenegotiation);
 
 export default router;

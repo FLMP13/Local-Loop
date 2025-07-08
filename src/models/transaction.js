@@ -4,11 +4,24 @@ const transactionSchema = new mongoose.Schema({
   item:      { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: true },
   lender:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
   borrower:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
-  status:    { type: String, enum: ['requested', 'accepted', 'rejected', 'borrowed', 'returned', 'completed'], default: 'requested' },
+  status: {
+    type: String,
+    enum: [
+      'requested', 'accepted', 'rejected', 'borrowed', 'returned', 'completed',
+      'renegotiation_requested'
+    ],
+    default: 'requested'
+  },
   requestDate: { type: Date, default: Date.now },
-  returnDate: { type: Date},
   requestedFrom: { type: Date, required: true },
   requestedTo:   { type: Date, required: true },
+  renegotiation: {
+    from: { type: Date },
+    to: { type: Date },
+    message: { type: String }
+  },
+  lenderMessage: { type: String },   // for decline/renegotiation
+  borrowerMessage: { type: String }, // for renegotiation response
   lenderReviewed: { type: Boolean, default: false },
   borrowerReviewed: { type: Boolean, default: false }
 });

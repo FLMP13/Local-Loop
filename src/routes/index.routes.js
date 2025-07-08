@@ -10,7 +10,7 @@ const router = express.Router();
 router.use('/items', itemsRouter); // Use items router for item-related routes
 router.use('/auth',  authRouter); // Use auth router for authentication routes
 router.use('/users', usersRouter); // Use users router for user-related routes
-router.use(transactionRoutes); // Use transaction routes for transaction-related routes
+router.use('/transactions', transactionRoutes); // Use transaction routes for transaction-related routes
 router.use(reviewRoutes); // Use review routes for review-related routes
 
 export default router;

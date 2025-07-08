@@ -5,35 +5,34 @@ import Item from '../models/item.js';
 export async function requestLend(req, res) {
   try {
     const { itemId, requestedFrom, requestedTo } = req.body;
-    const from = new Date(requestedFrom);
-    const to = new Date(requestedTo);
-    if (to < from) return res.status(400).json({ error: 'Invalid date range.' });
-
-    const item = await Item.findById(itemId);
-    if (!item) return res.status(404).json({ error: 'Item not found.' });
-
-    // check requested range inside any availability block
-    const ok = item.availability?.some(
-      ({ from: a, to: b }) => from >= new Date(a) && to <= new Date(b)
-    );
-    if (!ok) {
-      return res.status(400).json({ error: 'Requested dates not available.' });
+    if (!itemId || !requestedFrom || !requestedTo) {
+      return res.status(400).json({ error: 'Missing required fields.' });
     }
 
-    // Create the transaction with status 'requested' 
-    const txn = await Transaction.create({
+    const item = await Item.findById(itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    // Prevent owner from requesting their own item
+    if (item.owner.toString() === req.userId) {
+      return res.status(400).json({ error: 'You cannot request your own item.' });
+    }
+
+    const transaction = await Transaction.create({
       item: itemId,
       lender: item.owner,
       borrower: req.userId,
-      requestedFrom: from,
-      requestedTo: to
+      status: 'requested',
+      requestedFrom,
+      requestedTo
     });
+
+    // Optionally update item status
     item.status = 'requested';
     await item.save();
-    res.status(201).json(txn);
 
+    res.status(201).json(transaction);
   } catch (err) {
-    console.error('requestLend error:', err);
+    console.error('Failed to create transaction:', err);
     res.status(500).json({ error: 'Failed to create transaction.' });
   }
 }
@@ -154,5 +153,77 @@ export async function completeTransaction(req, res) {
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: 'Failed to complete transaction.' });
+  }
+}
+
+// Lender or borrower proposes renegotiation
+export async function renegotiateTransaction(req, res) {
+  try {
+    const { id } = req.params;
+    const { from, to, message } = req.body;
+    const transaction = await Transaction.findById(id);
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+
+    // Only lender or borrower can renegotiate
+    const userId = req.userId?.toString();
+    if (
+      transaction.lender?.toString() !== userId &&
+      transaction.borrower?.toString() !== userId
+    ) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    transaction.status = 'renegotiation_requested';
+    transaction.renegotiation = { from, to, message };
+    await transaction.save();
+    res.json(transaction);
+  } catch (err) {
+    console.error('Renegotiation error:', err);
+    res.status(500).json({ error: 'Failed to renegotiate transaction.' });
+  }
+}
+
+export async function acceptRenegotiation(req, res) {
+  try {
+    const { id } = req.params;
+    const transaction = await Transaction.findById(id);
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+
+    // Only borrower can accept
+    if (transaction.borrower.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    transaction.status = 'accepted';
+    transaction.requestedFrom = transaction.renegotiation.from;
+    transaction.requestedTo = transaction.renegotiation.to;
+    transaction.renegotiation = undefined;
+    await transaction.save();
+    res.json(transaction);
+  } catch (err) {
+    console.error('Accept renegotiation error:', err);
+    res.status(500).json({ error: 'Failed to accept renegotiation.' });
+  }
+}
+
+export async function declineRenegotiation(req, res) {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+    const transaction = await Transaction.findById(id);
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+
+    // Only borrower can decline
+    if (transaction.borrower.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    transaction.status = 'rejected';
+    transaction.borrowerMessage = message;
+    await transaction.save();
+    res.json(transaction);
+  } catch (err) {
+    console.error('Decline renegotiation error:', err);
+    res.status(500).json({ error: 'Failed to decline renegotiation.' });
   }
 }
