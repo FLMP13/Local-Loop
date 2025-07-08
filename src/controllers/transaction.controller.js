@@ -4,35 +4,36 @@ import Item from '../models/item.js';
 // Request to borrow/lend an item
 export async function requestLend(req, res) {
   try {
-    const { itemId } = req.body;
+    const { itemId, requestedFrom, requestedTo } = req.body;
+    const from = new Date(requestedFrom);
+    const to = new Date(requestedTo);
+    if (to < from) return res.status(400).json({ error: 'Invalid date range.' });
+
     const item = await Item.findById(itemId);
-    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (!item) return res.status(404).json({ error: 'Item not found.' });
 
-    // Prevent owner from requesting their own item
-    if (item.owner.toString() === req.userId) {
-      return res.status(400).json({ error: 'You cannot request your own item.' });
+    // check requested range inside any availability block
+    const ok = item.availability?.some(
+      ({ from: a, to: b }) => from >= new Date(a) && to <= new Date(b)
+    );
+    if (!ok) {
+      return res.status(400).json({ error: 'Requested dates not available.' });
     }
 
-    // Optionally: Check if a pending transaction already exists
-    const existing = await Transaction.findOne({ item: itemId, borrower: req.userId, status: 'requested' });
-    if (existing) {
-      return res.status(400).json({ error: 'You have already requested this item.' });
-    }
-
-    const transaction = await Transaction.create({
+    // Create the transaction with status 'requested' 
+    const txn = await Transaction.create({
       item: itemId,
       lender: item.owner,
       borrower: req.userId,
-      status: 'requested'
+      requestedFrom: from,
+      requestedTo: to
     });
-
-    // Update item status to 'requested'
     item.status = 'requested';
     await item.save();
+    res.status(201).json(txn);
 
-    res.status(201).json(transaction);
   } catch (err) {
-    console.error(err);
+    console.error('requestLend error:', err);
     res.status(500).json({ error: 'Failed to create transaction.' });
   }
 }
@@ -69,6 +70,7 @@ export async function getMyLendings(req, res) {
   }
 }
 
+// Get all transactions for an item using itemId
 export async function getTransactionById(req, res) {
   try {
     const transaction = await Transaction.findById(req.params.id)
@@ -85,6 +87,7 @@ export async function getTransactionById(req, res) {
   }
 }
 
+// Accept a transaction request and set item status to 'lent' and transaction status to 'accepted'
 export async function acceptTransaction(req, res) {
   try {
     const transaction = await Transaction.findById(req.params.id).populate('item');
@@ -106,6 +109,7 @@ export async function acceptTransaction(req, res) {
   }
 }
 
+// Decline a transaction request and set transaction status to 'rejected' and item status to 'available'
 export async function declineTransaction(req, res) {
   try {
     const transaction = await Transaction.findById(req.params.id).populate('item');
@@ -188,5 +192,31 @@ export async function completePayment(req, res) {
     res.json({ message: 'Payment completed', status: 'borrowed' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to complete payment' });
+  }
+}
+
+export async function completeTransaction(req, res) {
+  try {
+    const transaction = await Transaction.findById(req.params.id).populate('item');
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    
+    // Only borrower can mark as completed (Do we want to keep it like this or change it to lender?)
+    // My thinking was, that this way the borrower will be more likely to return the item on time as he will not get his deposit back if he does not return the item on time.
+    if (transaction.borrower.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    transaction.status = 'completed';
+    transaction.returnDate = new Date();
+    await transaction.save();
+
+    if (transaction.item) {
+      transaction.item.status = 'available';
+      await transaction.item.save();
+    }
+
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to complete transaction.' });
   }
 }

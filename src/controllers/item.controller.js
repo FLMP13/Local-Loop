@@ -1,10 +1,9 @@
-// Controller Functions for Item Management
-import Item from '../models/item.js'; // Import Item model
-import ZipCode from '../models/zipCode.js'; // Import ZipCode model
+import Item from '../models/item.js';
+import ZipCode from '../models/zipCode.js';
 import User from '../models/user.js';
 import { getDistanceFromZip } from '../utils/yourDistanceUtil.js';
 
-// Helper to get GeoJSON Point from a ZIP code
+// This function looks up the ZIP code in the database and returns its coordinates
 async function getLocationFromZip(zipCode) {
   const z = await ZipCode.findOne({ zipCode });
   if (!z) {
@@ -14,12 +13,11 @@ async function getLocationFromZip(zipCode) {
   }
   return {
     type: 'Point',
-    coordinates: [z.longitude, z.latitude]           // [lon, lat]
+    coordinates: [z.longitude, z.latitude]
   };
 }
 
-// Get all items and return them as JSON while populating owner details and sorting by price
-// Supports filtering by category, price range, search term, and sorting options
+// Get all items with optional filters and sorting 
 export const getAllItems = async (req, res) => {
   try {
     const { category, minPrice, maxPrice, search, sort } = req.query;
@@ -32,7 +30,7 @@ export const getAllItems = async (req, res) => {
       if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
     }
     if (search) {
-      filter.title = { $regex: search, $options: 'i' }; // case-insensitive
+      filter.title = { $regex: search, $options: 'i' };
     }
 
     let sortOption = {};
@@ -50,6 +48,7 @@ export const getAllItems = async (req, res) => {
       userZip = user?.zipCode;
     }
 
+    // Calculate distance for each item based on the user's zip code and the item's owner's zip code
     const itemsWithDistance = await Promise.all(items.map(async item => {
       let distance = null;
       if (userZip && item.owner?.zipCode) {
@@ -64,30 +63,43 @@ export const getAllItems = async (req, res) => {
   }
 };
 
-// Create a new item with images and store it in the database
+// Create a new item with images and store it in the database including availability and location
 export const createItem = async (req, res) => {
   try {
-    const images = (req.files || []).map(file => ({
-      data: file.buffer,
-      contentType: file.mimetype
+    let availability = [];
+    if (req.body.availability) {
+      availability = JSON.parse(req.body.availability);
+    }
+
+    const images = (req.files || []).map(f => ({
+      data: f.buffer,
+      contentType: f.mimetype
     }));
-    // derive location from user's ZIP code
-    const user = await User.findById(req.userId, 'zipCode');
+
+    // look up user zip code and get location coordinates
+    const user     = await User.findById(req.userId, 'zipCode');
     const location = await getLocationFromZip(user.zipCode);
-    const item = new Item({
-      ...req.body,
-      owner: req.userId,
-      images,
+
+    // Create the item with all required fields
+    const item = await Item.create({
+      owner:        req.userId,
+      title:        req.body.title,
+      description:  req.body.description,
+      price:        req.body.price,
+      category:     req.body.category,
+      images,                    
+      availability,
       location
     });
-    await item.save();
-    res.status(201).json(item);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+
+    return res.status(201).json(item);
+  } catch (err) {
+    console.error('createItem error:', err);
+    return res.status(err.status || 500).json({ error: err.message });
   }
 };
 
-// Delete an item by ID and return a success message
+// Delete an item by ID
 export const deleteItem = async (req, res) => {
   try {
     const id = req.params.id;
@@ -101,26 +113,34 @@ export const deleteItem = async (req, res) => {
   }
 };
 
-// Update an item by ID with new data and return the updated item
+// Update an item by ID and return the updated item
 export const updateItem = async (req, res) => {
   try {
     const id = req.params.id;
+    const location = await getLocationFromZip(
+      (await User.findById(req.userId)).zipCode
+    );
 
-    // Recalc location in case user’s ZIP changed
-    const user = await User.findById(req.userId, 'zipCode');
-    const location = await getLocationFromZip(user.zipCode);
+    // merge & parse availability if sent
+    let data = { ...req.body, location };
+    if (req.body.availability != null) {
+      data.availability = typeof req.body.availability === 'string'
+        ? JSON.parse(req.body.availability)   // parse only if string
+        : req.body.availability;             // already an object/array
+    }
 
-    const updatedItem = await Item.findByIdAndUpdate(id, { ...req.body, location }, { new: true });
+    const updatedItem = await Item.findByIdAndUpdate(id, data, { new: true });
     if (!updatedItem) {
       return res.status(404).json({ error: 'Item not found' });
-    } 
+    }
     res.status(200).json(updatedItem);
   } catch (error) {
+    console.error('updateItem error:', error);
     res.status(500).json({ error: error.message });
-  } 
+  }
 };
 
-// Get an item by ID and return it as JSON, excluding image data
+// Get an item by ID and return it with its owner details and distance from the user
 export const getItemById = async (req, res) => {
   try {
     const item = await Item
@@ -144,17 +164,29 @@ export const getItemById = async (req, res) => {
   }
 };
 
-// Get an item by ID and return it with its images
+// Get an item image by item ID and image index
+// Ongoing issues with image data not being sent correctly !
 export const getItemImage = async (req, res) => {
   try {
-    const item = await Item.findById(req.params.id);
-    const idx = parseInt(req.params.index, 10);
-    if (!item || !item.images[idx]) return res.status(404).send('Image not found');
-    res.contentType(item.images[idx].contentType);
-    res.send(item.images[idx].data);
+    const { id, index } = req.params;
+    const idx = parseInt(index, 10);
+
+    const item = await Item.findById(id);
+    if (!item) {
+      return res.status(404).end('Item not found');
+    }
+
+    const img = item.images[idx];
+    if (!img || !img.data) {
+      return res.status(404).end('Image not found');
+    }
+
+    res.contentType(img.contentType);
+    return res.send(img.data);
+
   } catch (err) {
-    console.error('Error retrieving image:', err);
-    res.status(500).send('Server error');
+    console.error('getItemImage error:', err);
+    return res.status(500).end();
   }
 };
 
@@ -192,13 +224,13 @@ export const getMyItems = async (req, res) => {
   }
 };
 
-// GET /api/items/nearby?radius=…&category=…&minPrice=…&maxPrice=…&search=…&sort=…
+// Get nearby items based on user's location, filters, and sorting options
 export const getNearbyItems = async (req, res) => {
   try {
     const { radius = '', category, minPrice, maxPrice, search, sort } = req.query;
     const filter = {};
 
-    // ── Standard filters ───────────────────────────────────────
+    // ── Filters ──────────────────────────────────────────────
     if (category)      filter.category = category;
     if (minPrice || maxPrice) {
       filter.price = {};
@@ -231,12 +263,12 @@ export const getNearbyItems = async (req, res) => {
     }
     // else radius is '' or invalid → no geo filter
 
-    // ── Sorting ──────────────────────────────────────────────
+    // Sorting ────────────────────────────────────────────
     let sortOption = {};
     if (sort === 'price_asc')      sortOption.price = 1;
     else if (sort === 'price_desc') sortOption.price = -1;
 
-    // ── Query & Respond ──────────────────────────────────────
+    // Query & Respond ──────────────────────────────────────
     const items = await Item
       .find(filter)
       .sort(sortOption)

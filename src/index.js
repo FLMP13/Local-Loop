@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import './models/user.js';           // register User model
 import './models/zipCode.js';        // register ZipCode model
 import './models/transaction.js';    // register Transaction model
+import './models/review.js';        // register Review model
 import connectDB from './config/db.js';
 import loadZipCodes from './utils/loadZipCodes.js';
 import apiRouter from './routes/index.routes.js';

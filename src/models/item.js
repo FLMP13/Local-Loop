@@ -1,7 +1,5 @@
 import mongoose from 'mongoose';
 
-// This file defines the Mongoose schema for an item in the lending platform.
-
 const itemSchema = new mongoose.Schema({
     title: {
         type: String,
@@ -39,7 +37,7 @@ const itemSchema = new mongoose.Schema({
         ],
         validate: [arr => arr.length <= 3, 'At most 3 images are allowed'],
         default: [],
-        required: true //optional? No at least one image should be required i guess
+        required: true
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
@@ -53,7 +51,7 @@ const itemSchema = new mongoose.Schema({
       required: true 
     },
     coordinates: {
-      type: [Number],   // [longitude, latitude]
+      type: [Number],  
       required: true
     }
   },
@@ -62,6 +60,15 @@ const itemSchema = new mongoose.Schema({
         required: true,
         enum: ['available', 'unavailable', 'requested', 'borrowed', 'lent', 'returned'],
         default: 'available'
+    },
+    availability: {
+        type: [
+            {
+                from: Date,
+                to: Date
+            }
+        ],
+        default: []
     }
 });
 
