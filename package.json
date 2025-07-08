@@ -25,7 +25,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongo": "^0.1.0",
     "mongodb": "^6.17.0",
-    "mongoose": "^8.15.1",
+    "mongoose": "^8.16.1",
     "mongosh": "^2.5.3",
     "multer": "^2.0.1",
     "react-day-picker": "^9.7.0"

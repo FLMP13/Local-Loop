@@ -7,6 +7,8 @@ import {
   getTransactionById,
   acceptTransaction,
   declineTransaction,
+  getPaymentSummary,
+  completePayment,
   completeTransaction,
   renegotiateTransaction,
   acceptRenegotiation,
@@ -31,6 +33,9 @@ router.patch('/:id/renegotiate', auth, renegotiateTransaction);
 router.patch('/:id/renegotiation/accept', auth, acceptRenegotiation);
 router.patch('/:id/renegotiation/decline', auth, declineRenegotiation);
 router.patch('/:id/edit', auth, editTransaction);
+router.patch('/transactions/:id/complete-payment', auth, completePayment);
+router.get('/transactions/:id/summary', auth, getPaymentSummary); 
+
 router.patch('/:id/retract', auth, retractTransaction);
 router.patch('/:id/return-code', auth, generateReturnCode);
 router.post('/:id/return-code', auth, submitReturnCode);

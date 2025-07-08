@@ -27,7 +27,27 @@ export async function login(req, res, next) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const token = jwt.sign({ sub: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user._id, nickname: user.nickname, email: user.email, profilePic: user.profilePic } });
+    
+    // Debug: Log user data to see what's available
+    console.log('User data from database:', {
+      id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      nickname: user.nickname,
+      email: user.email
+    });
+    
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        firstName: user.firstName,
+        lastName: user.lastName,
+        nickname: user.nickname, 
+        email: user.email, 
+        profilePic: user.profilePic 
+      } 
+    });
   } catch (err) {
     next(err);
   }
