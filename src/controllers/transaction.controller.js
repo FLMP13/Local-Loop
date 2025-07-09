@@ -428,8 +428,8 @@ export async function generatePickupCode(req, res) {
       return res.status(400).json({ error: 'Cannot generate code at this stage.' });
     }
 
-    // Generate a 6-digit code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate a 6-character hex code (like return code)
+    const code = crypto.randomBytes(3).toString('hex').toUpperCase();
     transaction.pickupCode = code;
     await transaction.save();
     res.json({ code });
