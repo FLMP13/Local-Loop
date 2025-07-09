@@ -17,7 +17,10 @@ import {
   retractTransaction,
   generateReturnCode,
   submitReturnCode,
-  forceCompleteReturn
+  forceCompleteReturn,
+  generatePickupCode,
+  usePickupCode,
+  forcePickup
 } from '../controllers/transaction.controller.js';
 
 const router = express.Router();
@@ -33,12 +36,14 @@ router.patch('/:id/renegotiate', auth, renegotiateTransaction);
 router.patch('/:id/renegotiation/accept', auth, acceptRenegotiation);
 router.patch('/:id/renegotiation/decline', auth, declineRenegotiation);
 router.patch('/:id/edit', auth, editTransaction);
-router.patch('/transactions/:id/complete-payment', auth, completePayment);
-router.get('/transactions/:id/summary', auth, getPaymentSummary); 
-
+router.patch('/:id/complete-payment', auth, completePayment);
+router.get('/:id/summary', auth, getPaymentSummary);
 router.patch('/:id/retract', auth, retractTransaction);
 router.patch('/:id/return-code', auth, generateReturnCode);
 router.post('/:id/return-code', auth, submitReturnCode);
 router.patch('/:id/return-complete', auth, forceCompleteReturn);
+router.patch('/:id/pickup-code', auth, generatePickupCode); 
+router.post('/:id/pickup-code', auth, usePickupCode); 
+router.patch('/:id/force-pickup', auth, forcePickup);
 
 export default router;

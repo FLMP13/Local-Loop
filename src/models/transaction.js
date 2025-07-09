@@ -7,7 +7,7 @@ const transactionSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: [
-      'requested', 'accepted', 'rejected', 'borrowed', 'returned', 'completed',
+      'requested', 'accepted', 'paid', 'rejected', 'borrowed', 'returned', 'completed',
       'renegotiation_requested', 'retracted'
     ],
     default: 'requested'
@@ -27,6 +27,8 @@ const transactionSchema = new mongoose.Schema({
   returnCode: { type: String },
   returnCodeGenerated: { type: Boolean, default: false },
   returnCodeUsed: { type: Boolean, default: false },
+  pickupCode: { type: String },
+  pickupCodeUsed: { type: Boolean, default: false },
 });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

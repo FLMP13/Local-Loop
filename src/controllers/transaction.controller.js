@@ -190,20 +190,15 @@ export async function getPaymentSummary(req, res) {
 export async function completePayment(req, res) {
   try {
     const transaction = await Transaction.findById(req.params.id).populate('item');
-    
-    if (!transaction || transaction.borrower.toString() !== req.userId) {
+    if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
-
-    transaction.status = 'borrowed';
-    await transaction.save();
-
-    if (transaction.item) {
-      transaction.item.status = 'borrowed';
-      await transaction.item.save();
+    if (transaction.borrower.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Only the borrower can complete payment.' });
     }
-
-    res.json({ message: 'Payment completed', status: 'borrowed' });
+    transaction.status = 'paid';
+    await transaction.save();
+    res.json({ message: 'Payment completed', status: 'paid' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to complete payment' });
   }
@@ -237,9 +232,12 @@ export async function completeTransaction(req, res) {
 
 // Lender or borrower proposes renegotiation
 export async function renegotiateTransaction(req, res) {
+  const { from, to, message } = req.body || {};
+  if (!from || !to) {
+    return res.status(400).json({ error: 'Missing from/to in request body.' });
+  }
   try {
     const { id } = req.params;
-    const { from, to, message } = req.body;
     const transaction = await Transaction.findById(id);
     if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
 
@@ -409,3 +407,83 @@ export const forceCompleteReturn = async (req, res) => {
   await tx.save();
   res.json({ success: true });
 };
+
+// Generate pickup code for a transaction
+export async function generatePickupCode(req, res) {
+  try {
+    const { id } = req.params;
+    const transaction = await Transaction.findById(id);
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+
+    // Only borrower can generate after payment
+    if (transaction.borrower.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    // If code already exists, return it
+    if (transaction.pickupCode) {
+      return res.json({ code: transaction.pickupCode });
+    }
+    // Only if status is 'accepted' or 'paid'
+    if (!['accepted', 'paid', 'borrowed'].includes(transaction.status)) {
+      return res.status(400).json({ error: 'Cannot generate code at this stage.' });
+    }
+
+    // Generate a 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    transaction.pickupCode = code;
+    await transaction.save();
+    res.json({ code });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate pickup code.' });
+  }
+}
+
+export async function usePickupCode(req, res) {
+  try {
+    const { id } = req.params;
+    const { code } = req.body;
+    const transaction = await Transaction.findById(id).populate('item');
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+
+    // Only lender can use the code
+    if (transaction.lender.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    if (transaction.pickupCodeUsed) {
+      return res.status(400).json({ error: 'Code already used.' });
+    }
+    if (transaction.pickupCode !== code) {
+      return res.status(400).json({ error: 'Incorrect code.' });
+    }
+
+    // Mark as borrowed
+    transaction.status = 'borrowed';
+    transaction.pickupCodeUsed = true;
+    transaction.pickupCode = undefined;
+    if (transaction.item) {
+      transaction.item.status = 'lent';
+      await transaction.item.save();
+    }
+    await transaction.save();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to use pickup code.' });
+  }
+}
+
+// Force pickup for a transaction (bypassing code)
+export async function forcePickup(req, res) {
+  try {
+    const transaction = await Transaction.findById(req.params.id);
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    if (transaction.status !== 'paid') return res.status(400).json({ error: 'Cannot force pickup at this stage.' });
+    if (transaction.borrower.toString() !== req.userId) return res.status(403).json({ error: 'Not authorized.' });
+
+    transaction.status = 'borrowed';
+    transaction.pickupCodeUsed = true;
+    await transaction.save();
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to force pickup' });
+  }
+}
