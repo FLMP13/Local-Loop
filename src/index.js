@@ -1,22 +1,49 @@
-// Import express, connectDB function, and dotenv for environment variables
-const express = require('express');
-const connectDB = require('./config/db');
-require('dotenv').config();
+import express from 'express';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import './models/user.js';           // register User model
+import './models/zipCode.js';        // register ZipCode model
+import './models/transaction.js';    // register Transaction model
+import './models/review.js';        // register Review model
+import connectDB from './config/db.js';
+import loadZipCodes from './utils/loadZipCodes.js';
+import apiRouter from './routes/index.routes.js';
+
+dotenv.config();
 
 const app = express();
+app.use(cors()); // Enable CORS for all routes
 app.use(express.json());
+app.use('/api', apiRouter); // mount the main API router on the /api path
 
-// Import routes and use them with the '/api' prefix
-const apiRouter = require('./routes/routes') // Import routes
-app.use('/api', apiRouter);
-
-
-// Connect to MongoDB using the connectDB function
 connectDB()
-    .then(() => {
-        app.listen(process.env.PORT, () => {
-    console.log(`Backend listening on http://localhost:${process.env.PORT}`);
+  .then(async () => {
+    console.log('MongoDB connected');
+
+    // load ZIPs if empty ───────────────────────
+    const ZipCode = mongoose.model('ZipCode');
+    const count = await ZipCode.countDocuments();
+    if (count === 0) {
+      console.log('ZIP collection empty — loading centroids…');
+      await loadZipCodes();
+    }
+
+    await mongoose.model('User').syncIndexes(); // ensure indexes are created for the User model
+    await ZipCode.syncIndexes(); // ensure indexes are created for the ZipCode model
+
+    // global error handler
+    app.use((err, req, res, next) => {
+      console.error(err);
+      res
+        .status(err.status || 500)
+        .json({ error: err.message || 'Server error' });
     });
-}).catch(err => {
-    console.error('MongoDB connection error:', err);
-});
+
+    app.listen(process.env.PORT, () => {
+      console.log(`Server listening on http://localhost:${process.env.PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to connect to MongoDB:', err);
+  });

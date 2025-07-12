@@ -1,38 +1,24 @@
 // This file defines the User model for MongoDB using Mongoose.
 
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
-    username: {
-        type: String,
-        required: true,
-        unique: true,
-    },
-    password: {
-        type: String,
-        required: true,
-        minlength: 6
-    },
-    email: {
-        type: String,
-        required: true,
-        unique: true,
-    },
-    zipCode: {
-        type: String,
-        required: true
-    },
-    passwordHash: {
-        type: String,
-        required: true
-    },
-    subscription: {
-        type: String,
-        enum: ['free', 'premium'],
-        default: 'free'
-    }
-});
+  firstName:   { type: String, required: true },
+  lastName:    { type: String, required: true },
+  nickname:    { type: String, required: false },
+  email:       { type: String, required: true, lowercase: true },
+  passwordHash:{ type: String, required: true },      
+  zipCode:     { type: String, required: true },
+  bio:         { type: String, required: false },
+  profilePic:  { type: mongoose.Schema.Types.ObjectId, ref: 'profilePics.files', required: false },
+  subscription:{ type: String, enum: ['free','premium'], default: 'free' },
+  lenderRating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 }},
+  borrowerRating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 }}
+}, { timestamps: true });
 
-module.exports = mongoose.model('User', userSchema);
+userSchema.index({ email:    1 }, { unique: true });
+userSchema.index({ nickname:    1 }, { unique: true, sparse: true });
 
+const User = mongoose.model('User', userSchema);
 
+export default User;

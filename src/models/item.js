@@ -1,6 +1,4 @@
-// This file defines the Mongoose schema for an item in the lending platform.
-
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const itemSchema = new mongoose.Schema({
     title: {
@@ -18,23 +16,65 @@ const itemSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: true
+        required: true,
+        enum: [
+            'Electronics',
+            'Furniture', // Is that something to lend/borrow? // NO :) needs to be adapted for the whole list
+            'Clothing',
+            'Books',
+            'Sports', // Is that something to lend/borrow? // NO :) needs to be adapted for the whole list
+            'Toys',
+            'Tools',
+            'Other'
+        ]
     },
     images: {
-        type: [String],
-        required: false,
-        default: []
+        type: [
+            {
+                data: Buffer,
+                contentType: String
+            }
+        ],
+        validate: [arr => arr.length <= 3, 'At most 3 images are allowed'],
+        default: [],
+        required: true
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true 
+    },
+    location: {
+    type: { 
+      type: String, 
+      enum: ['Point'], 
+      required: true 
+    },
+    coordinates: {
+      type: [Number],  
+      required: true
+    }
+  },
+    status: {
+        type: String,
+        required: true,
+        enum: ['available', 'unavailable', 'requested', 'borrowed', 'lent', 'returned'],
+        default: 'available'
     },
     availability: {
-        type: Boolean,
-        required: true,
-        default: true
+        type: [
+            {
+                from: Date,
+                to: Date
+            }
+        ],
+        default: []
     }
 });
 
-module.exports = mongoose.model('Item', itemSchema);
+// create a 2dsphere index on location
+itemSchema.index({ location: '2dsphere' });
+
+const Item = mongoose.model('Item', itemSchema);
+
+export default Item;
