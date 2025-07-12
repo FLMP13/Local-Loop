@@ -2,6 +2,13 @@ import Transaction from '../models/transaction.js';
 import Item from '../models/item.js';
 import crypto from 'crypto';
 
+// Helper function to calculate lending fee based on duration and weekly rate
+function computeWeeklyCharge(from, to, weeklyRate) {
+  const days = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+  const weeks = Math.ceil(days / 7);
+  return weeks * weeklyRate;
+}
+
 // Request to borrow/lend an item
 export async function requestLend(req, res) {
   try {
@@ -168,14 +175,26 @@ export async function getPaymentSummary(req, res) {
     console.log('Transaction borrower:', transaction.borrower);
     console.log('Transaction item:', transaction.item);
 
+    // Calculate deposit and total amount
+    const deposit = (transaction.item ? transaction.item.price : 0) * 5;
+    const totalAmount = computeWeeklyCharge(
+      transaction.requestedFrom, 
+      transaction.requestedTo, 
+      transaction.item ? transaction.item.price : 0
+    ) + deposit;
+
     const summary = {
       id: transaction._id,
       borrower: transaction.borrower ? (transaction.borrower.firstName + ' ' + transaction.borrower.lastName) : 'Unknown Borrower', 
       itemTitle: transaction.item ? transaction.item.title : 'Unknown Item',
-      itemPrice: transaction.item ? transaction.item.price : 0,
+      itemPrice: transaction.item ? transaction.item.price : 0, // Weekly rate
+      deposit: deposit,
+      totalAmount: totalAmount,
       lender: transaction.lender ? (transaction.lender.firstName + ' ' + transaction.lender.lastName) : 'Unknown Lender',
       status: transaction.status,
-      requestDate: transaction.requestDate
+      requestDate: transaction.requestDate,
+      requestedFrom: transaction.requestedFrom,
+      requestedTo: transaction.requestedTo
     };
   
     // Return the summary
@@ -196,10 +215,30 @@ export async function completePayment(req, res) {
     if (transaction.borrower.toString() !== req.userId) {
       return res.status(403).json({ error: 'Only the borrower can complete payment.' });
     }
+
+    // Calculate financial details for payment completion
+    const deposit = transaction.item.price * 5;
+    const totalAmount = computeWeeklyCharge(
+      transaction.requestedFrom, 
+      transaction.requestedTo, 
+      transaction.item.price
+    ) + deposit;
+
+    // Update transaction with financial details and status (only store deposit and total)
     transaction.status = 'paid';
+    transaction.deposit = deposit;
+    transaction.totalAmount = totalAmount;
+    
     await transaction.save();
-    res.json({ message: 'Payment completed', status: 'paid' });
+    
+    res.json({ 
+      message: 'Payment completed', 
+      status: 'paid',
+      deposit: deposit,
+      totalAmount: totalAmount
+    });
   } catch (err) {
+    console.error('Error completing payment:', err);
     res.status(500).json({ error: 'Failed to complete payment' });
   }
 }
@@ -487,3 +526,4 @@ export async function forcePickup(req, res) {
     res.status(500).json({ error: 'Failed to force pickup' });
   }
 }
+

@@ -15,6 +15,11 @@ const transactionSchema = new mongoose.Schema({
   requestDate: { type: Date, default: Date.now },
   requestedFrom: { type: Date, required: true },
   requestedTo:   { type: Date, required: true },
+  
+  // Financial tracking
+  deposit: { type: Number },    // Security deposit (usually 5x base price)
+  totalAmount: { type: Number }, // Total amount paid (calculated lending fee + deposit)
+  
   renegotiation: {
     from: { type: Date },
     to: { type: Date },
