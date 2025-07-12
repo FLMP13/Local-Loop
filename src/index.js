@@ -1,6 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import './models/user.js';           // register User model
 import './models/zipCode.js';        // register ZipCode model
 import './models/transaction.js';    // register Transaction model
@@ -12,6 +13,7 @@ import apiRouter from './routes/index.routes.js';
 dotenv.config();
 
 const app = express();
+app.use(cors()); // Enable CORS for all routes
 app.use(express.json());
 app.use('/api', apiRouter); // mount the main API router on the /api path
 

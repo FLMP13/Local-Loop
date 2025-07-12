@@ -11,7 +11,22 @@ export async function signup(req, res, next) {
       passwordHash: hash,
       profilePic: req.file?.id
     });
-    res.status(201).json({ message: 'User created', userId: user._id });
+    
+    // Generate token and return user data for automatic login
+    const token = jwt.sign({ sub: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    
+    res.status(201).json({ 
+      message: 'User created',
+      token, 
+      user: { 
+        id: user._id, 
+        firstName: user.firstName,
+        lastName: user.lastName,
+        nickname: user.nickname, 
+        email: user.email, 
+        profilePic: user.profilePic 
+      } 
+    });
   } catch (err) {
     next(err);
   }
