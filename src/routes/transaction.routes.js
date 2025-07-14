@@ -20,7 +20,10 @@ import {
   forceCompleteReturn,
   generatePickupCode,
   usePickupCode,
-  forcePickup
+  forcePickup,
+  reportDamage,
+  confirmNoDamage,
+  getTransactionFinancials
 } from '../controllers/transaction.controller.js';
 
 const router = express.Router();
@@ -45,5 +48,8 @@ router.patch('/:id/return-complete', auth, forceCompleteReturn);
 router.patch('/:id/pickup-code', auth, generatePickupCode); 
 router.post('/:id/pickup-code', auth, usePickupCode); 
 router.patch('/:id/force-pickup', auth, forcePickup);
+router.patch('/:id/report-damage', auth, reportDamage);
+router.patch('/:id/confirm-no-damage', auth, confirmNoDamage);
+router.get('/:id/financials', auth, getTransactionFinancials);
 
 export default router;
