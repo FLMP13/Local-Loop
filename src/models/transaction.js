@@ -15,6 +15,11 @@ const transactionSchema = new mongoose.Schema({
   requestDate: { type: Date, default: Date.now },
   requestedFrom: { type: Date, required: true },
   requestedTo:   { type: Date, required: true },
+  
+  // Financial tracking
+  deposit: { type: Number },    // Security deposit (usually 5x base price)
+  totalAmount: { type: Number }, // Total amount paid (calculated lending fee + deposit)
+  
   renegotiation: {
     from: { type: Date },
     to: { type: Date },
@@ -29,6 +34,12 @@ const transactionSchema = new mongoose.Schema({
   returnCodeUsed: { type: Boolean, default: false },
   pickupCode: { type: String },
   pickupCodeUsed: { type: Boolean, default: false },
+
+  paymentToLenderReleased: { type: Boolean, default: false }, // Indicates if payment to lender has been released
+  depositReturned: { type: Boolean, default: false }, // Indicates if deposit has been returned
+  damageReported: { type: Boolean, default: false }, // Indicates if damage has been reported
+  damageDescription: { type: String }, // Description of the reported damage
+  depositRefundPercentage: { type: Number, min: 0, max:100 } // Percentage of refund for reported damage
 });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

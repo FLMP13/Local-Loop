@@ -2,6 +2,50 @@ import Transaction from '../models/transaction.js';
 import Item from '../models/item.js';
 import crypto from 'crypto';
 
+// PayPal Sandbox Account Configuration
+const SANDBOX_ACCOUNTS = {
+  LOCALLOOP: 'localloop@business.example.com',
+  LENDER: 'gina.lenda@personal.example.com',
+  BORROWER: 'max.borrow@personal.example.com'
+};
+
+// PayPal Sandbox Transfer Simulation
+async function mockPayPalTransfer(fromAccount, toAccount, amount, description) {
+  // For sandbox: Simulation without logging
+  
+  const transferId = `MOCK_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  
+  // Simulate slight delay
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  return {
+    success: true,
+    transferId: transferId,
+    amount: amount,
+    from: fromAccount,
+    to: toAccount,
+    description: description,
+    timestamp: new Date().toISOString()
+  };
+}
+
+// Calculate platform fee (5% of lending fee)
+function calculatePlatformFee(lendingFee) {
+  return lendingFee * 0.05;
+}
+
+// Calculate payment to lender (95% of lending fee)
+function calculateLenderPayment(lendingFee) {
+  return lendingFee * 0.95;
+}
+
+// Helper function to calculate lending fee based on duration and weekly rate
+function computeWeeklyCharge(from, to, weeklyRate) {
+  const days = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+  const weeks = Math.ceil(days / 7);
+  return weeks * weeklyRate;
+}
+
 // Request to borrow/lend an item
 export async function requestLend(req, res) {
   try {
@@ -95,13 +139,14 @@ export async function getTransactionById(req, res) {
       .populate('lender', 'nickname email')
       .populate('borrower', 'nickname email');
     if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch transaction.' });
   }
 }
 
-// Accept a transaction request and set item status to 'lent' and transaction status to 'accepted'
+// Accept a transaction request and set item status to 'borrowed' and transaction status to 'accepted'
 export async function acceptTransaction(req, res) {
   try {
     const transaction = await Transaction.findById(req.params.id).populate('item');
@@ -112,8 +157,9 @@ export async function acceptTransaction(req, res) {
     transaction.status = 'accepted';
     await transaction.save();
 
+    // Item should be marked as borrowed when lender accepts
     if (transaction.item) {
-      transaction.item.status = 'lent';
+      transaction.item.status = 'borrowed';
       await transaction.item.save();
     }
 
@@ -163,19 +209,26 @@ export async function getPaymentSummary(req, res) {
       return res.status(403).json({ error: 'Not authorized to view this transaction.' });
     }
 
-    // Debug: Log the populated data
-    console.log('Transaction lender:', transaction.lender);
-    console.log('Transaction borrower:', transaction.borrower);
-    console.log('Transaction item:', transaction.item);
+    // Calculate deposit and total amount
+    const deposit = (transaction.item ? transaction.item.price : 0) * 5;
+    const totalAmount = computeWeeklyCharge(
+      transaction.requestedFrom, 
+      transaction.requestedTo, 
+      transaction.item ? transaction.item.price : 0
+    ) + deposit;
 
     const summary = {
       id: transaction._id,
       borrower: transaction.borrower ? (transaction.borrower.firstName + ' ' + transaction.borrower.lastName) : 'Unknown Borrower', 
       itemTitle: transaction.item ? transaction.item.title : 'Unknown Item',
-      itemPrice: transaction.item ? transaction.item.price : 0,
+      itemPrice: transaction.item ? transaction.item.price : 0, // Weekly rate
+      deposit: deposit,
+      totalAmount: totalAmount,
       lender: transaction.lender ? (transaction.lender.firstName + ' ' + transaction.lender.lastName) : 'Unknown Lender',
       status: transaction.status,
-      requestDate: transaction.requestDate
+      requestDate: transaction.requestDate,
+      requestedFrom: transaction.requestedFrom,
+      requestedTo: transaction.requestedTo
     };
   
     // Return the summary
@@ -196,10 +249,40 @@ export async function completePayment(req, res) {
     if (transaction.borrower.toString() !== req.userId) {
       return res.status(403).json({ error: 'Only the borrower can complete payment.' });
     }
+
+    // Calculate financial details for payment completion
+    const deposit = transaction.item.price * 5;
+    const lendingFee = computeWeeklyCharge(
+      transaction.requestedFrom, 
+      transaction.requestedTo, 
+      transaction.item.price
+    );
+    const totalAmount = lendingFee + deposit;
+    const platformFee = calculatePlatformFee(lendingFee);
+
+    // Update transaction with financial details and status
     transaction.status = 'paid';
+    transaction.deposit = deposit;
+    transaction.totalAmount = totalAmount;
+    
     await transaction.save();
-    res.json({ message: 'Payment completed', status: 'paid' });
+    
+    res.json({ 
+      message: 'Payment completed successfully', 
+      status: 'paid',
+      deposit: deposit,
+      totalAmount: totalAmount,
+      lendingFee: lendingFee,
+      platformFee: platformFee,
+      paymentFlow: {
+        borrowerPaid: totalAmount,
+        platformKeeps: platformFee,
+        willReleaseToLender: calculateLenderPayment(lendingFee),
+        depositHeld: deposit
+      }
+    });
   } catch (err) {
+    console.error('Error completing payment:', err);
     res.status(500).json({ error: 'Failed to complete payment' });
   }
 }
@@ -215,7 +298,7 @@ export async function completeTransaction(req, res) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    transaction.status = 'completed';
+    transaction.status = 'returned';
     transaction.returnDate = new Date();
     await transaction.save();
 
@@ -315,7 +398,7 @@ export const editTransaction = async (req, res) => {
     if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
     if (transaction.borrower.toString() !== req.userId)
       return res.status(403).json({ error: 'Not authorized' });
-    if (['completed', 'returned', 'rejected', 'retracted'].includes(transaction.status))
+    if (['returned', 'completed', 'rejected', 'retracted'].includes(transaction.status))
       return res.status(400).json({ error: 'Cannot edit this transaction' });
 
     transaction.requestedFrom = requestedFrom;
@@ -338,7 +421,7 @@ export const retractTransaction = async (req, res) => {
     if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
     if (transaction.borrower.toString() !== req.userId)
       return res.status(403).json({ error: 'Not authorized' });
-    if (['completed', 'returned', 'rejected'].includes(transaction.status))
+    if (['returned', 'completed', 'rejected'].includes(transaction.status))
       return res.status(400).json({ error: 'Cannot retract this transaction' });
 
     transaction.status = 'retracted';
@@ -373,7 +456,7 @@ export const submitReturnCode = async (req, res) => {
   const { id } = req.params;
   const { code } = req.body;
   const userId = req.userId; // FIXED
-  const tx = await Transaction.findById(id);
+  const tx = await Transaction.findById(id).populate('item', 'title');
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (tx.borrower.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
   if (tx.status !== 'borrowed') return res.status(400).json({ error: 'Not in borrowed state' });
@@ -388,24 +471,47 @@ export const submitReturnCode = async (req, res) => {
     return res.status(400).json({ error: 'Incorrect code.' });
   }
 
-  tx.status = 'completed';
+  // Calculate deposit distribution based on damage
+  const damageRefundPercentage = tx.damageRefundPercentage || 100; // Default: 100% refund to borrower
+  const depositToBorrower = tx.deposit * (damageRefundPercentage / 100); // Refund to borrower
+  const depositToLender = tx.deposit * ((100 - damageRefundPercentage) / 100); // Damage compensation to lender
+  
+  // Don't transfer deposit yet - wait for lender to inspect and confirm/report damage
+  
+  tx.status = 'returned';
   tx.returnCodeUsed = true;
+  // depositReturned will be set to true when damage is processed or confirmed as none
   await tx.save();
-  res.json({ success: true });
+  
+  res.json({ 
+    success: true,
+    message: 'Item returned successfully. Lender can now inspect for damage or fully refund the deposit.',
+    awaitingDamageInspection: true,
+    // Don't include depositDistribution yet - will be available after damage inspection
+  });
 };
 
 export const forceCompleteReturn = async (req, res) => {
   const { id } = req.params;
   const userId = req.userId; // FIXED
-  const tx = await Transaction.findById(id);
+  const tx = await Transaction.findById(id).populate('item', 'title');
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (tx.lender.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
   if (tx.status !== 'borrowed') return res.status(400).json({ error: 'Not in borrowed state' });
 
-  tx.status = 'completed';
-  tx.returnCodeUsed = true;
+  // Force return only changes status to 'returned' - no immediate deposit distribution
+  // Lender can then inspect and report damage or confirm no damage as usual
+  
+  tx.status = 'returned';
+  tx.returnCodeUsed = true; // Mark as if code was used
+  // depositReturned stays false - will be set after damage inspection
   await tx.save();
-  res.json({ success: true });
+  
+  res.json({ 
+    success: true,
+    message: 'Force return executed. Item marked as returned. You can now inspect for damage or fully refund the deposit.',
+    awaitingDamageInspection: true
+  });
 };
 
 // Generate pickup code for a transaction
@@ -456,17 +562,40 @@ export async function usePickupCode(req, res) {
       return res.status(400).json({ error: 'Incorrect code.' });
     }
 
-    // Mark as borrowed
+    // Calculate payments
+    const lendingFee = transaction.totalAmount - transaction.deposit;
+    const paymentToLender = calculateLenderPayment(lendingFee);
+    const platformFee = calculatePlatformFee(lendingFee);
+    
+    // Perform PayPal transfer to lender (95% of lending fee) - Fixed Sandbox Account
+    const transferResult = await mockPayPalTransfer(
+      SANDBOX_ACCOUNTS.LOCALLOOP,
+      SANDBOX_ACCOUNTS.LENDER,
+      paymentToLender,
+      `Lending payment for rental item - Period: ${new Date(transaction.requestedFrom).toLocaleDateString()} to ${new Date(transaction.requestedTo).toLocaleDateString()}`
+    );
+    
+    // Mark as borrowed and update payment tracking
     transaction.status = 'borrowed';
     transaction.pickupCodeUsed = true;
     transaction.pickupCode = undefined;
+    transaction.paymentToLenderReleased = true;
+    
     if (transaction.item) {
       transaction.item.status = 'lent';
       await transaction.item.save();
     }
     await transaction.save();
-    res.json({ success: true });
+    
+    // Fetch and return the updated transaction with populated fields
+    const updatedTransaction = await Transaction.findById(id)
+      .populate('item')
+      .populate('borrower')
+      .populate('lender');
+    
+    res.json(updatedTransaction);
   } catch (err) {
+    console.error('Error in usePickupCode:', err);
     res.status(500).json({ error: 'Failed to use pickup code.' });
   }
 }
@@ -474,16 +603,219 @@ export async function usePickupCode(req, res) {
 // Force pickup for a transaction (bypassing code)
 export async function forcePickup(req, res) {
   try {
-    const transaction = await Transaction.findById(req.params.id);
+    const transaction = await Transaction.findById(req.params.id).populate('item');
     if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
     if (transaction.status !== 'paid') return res.status(400).json({ error: 'Cannot force pickup at this stage.' });
     if (transaction.borrower.toString() !== req.userId) return res.status(403).json({ error: 'Not authorized.' });
 
+    // Calculate payments
+    const lendingFee = transaction.totalAmount - transaction.deposit;
+    const paymentToLender = calculateLenderPayment(lendingFee);
+    const platformFee = calculatePlatformFee(lendingFee);
+    
+    // Perform PayPal transfer to lender - Fixed Sandbox Account
+    const transferResult = await mockPayPalTransfer(
+      SANDBOX_ACCOUNTS.LOCALLOOP,
+      SANDBOX_ACCOUNTS.LENDER,
+      paymentToLender,
+      `Force pickup payment for rental item - Period: ${new Date(transaction.requestedFrom).toLocaleDateString()} to ${new Date(transaction.requestedTo).toLocaleDateString()}`
+    );
+    
     transaction.status = 'borrowed';
     transaction.pickupCodeUsed = true;
+    transaction.paymentToLenderReleased = true;
+
+    if (transaction.item) {
+      transaction.item.status = 'lent';
+      await transaction.item.save();
+    }
     await transaction.save();
-    res.json(transaction);
+    
+    // Fetch and return the updated transaction with populated fields
+    const updatedTransaction = await Transaction.findById(req.params.id)
+      .populate('item')
+      .populate('borrower')
+      .populate('lender');
+    
+    res.json(updatedTransaction);
   } catch (err) {
+    console.error('Error in forcePickup:', err);
     res.status(500).json({ error: 'Failed to force pickup' });
   }
 }
+
+// Report damage for a transaction (lender only)
+export const reportDamage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { damageDescription, depositRefundPercentage } = req.body;
+    const userId = req.userId;
+    
+    const transaction = await Transaction.findById(id).populate('item', 'title').populate('lender', 'email');
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    if (transaction.lender._id.toString() !== userId) return res.status(403).json({ error: 'Only lender can report damage' });
+    if (!['borrowed', 'returned'].includes(transaction.status)) return res.status(400).json({ error: 'Can only report damage for borrowed or returned items' });
+    if (transaction.depositReturned) return res.status(400).json({ error: 'Cannot report damage after deposit has been returned' });
+    
+    // Validate damage percentage
+    if (depositRefundPercentage < 0 || depositRefundPercentage > 100) {
+      return res.status(400).json({ error: 'Damage percentage must be between 0 and 100' });
+    }
+    
+    transaction.damageReported = true;
+    transaction.damageDescription = damageDescription;
+    transaction.depositRefundPercentage = depositRefundPercentage;
+    
+    // Now process the deposit transfers based on damage assessment
+    const depositToBorrower = transaction.deposit * (depositRefundPercentage / 100);
+    const depositToLender = transaction.deposit * ((100 - depositRefundPercentage) / 100);
+    
+    // Transfer damage compensation to lender if applicable - Fixed Sandbox Account
+    if (depositToLender > 0) {
+      const lenderTransfer = await mockPayPalTransfer(
+        SANDBOX_ACCOUNTS.LOCALLOOP,
+        SANDBOX_ACCOUNTS.LENDER,
+        depositToLender,
+        `Damage compensation for "${transaction.item.title}" - Borrower gets ${depositRefundPercentage}% refund`
+      );
+    }
+    
+    // Refund remaining deposit to borrower - Fixed Sandbox Account
+    if (depositToBorrower > 0) {
+      const borrowerTransfer = await mockPayPalTransfer(
+        SANDBOX_ACCOUNTS.LOCALLOOP,
+        SANDBOX_ACCOUNTS.BORROWER,
+        depositToBorrower,
+        `Deposit refund for "${transaction.item.title}" - ${depositRefundPercentage}% refund`
+      );
+    }
+     transaction.depositReturned = true;
+    transaction.status = 'completed'; // Transaction completely finished after deposit resolution
+    await transaction.save();
+    
+    console.log('Backend: After damage processing, transaction', transaction._id, {
+      status: transaction.status,
+      depositReturned: transaction.depositReturned,
+      depositRefundPercentage: transaction.depositRefundPercentage,
+      damageReported: transaction.damageReported
+    });
+
+    res.json({
+      success: true,
+      message: 'Damage reported and deposit processed successfully',
+      damageReport: {
+        description: damageDescription,
+        damageRefundPercentage: depositRefundPercentage,
+        lenderCompensationPercentage: 100 - depositRefundPercentage,
+        refundAmount: depositToBorrower,
+        compensationAmount: depositToLender
+      },
+      depositDistribution: {
+        toLender: depositToLender,
+        toBorrower: depositToBorrower,
+        damageRefundPercentage: depositRefundPercentage
+      }
+    });
+  } catch (err) {
+    console.error('Error reporting damage:', err);
+    res.status(500).json({ error: 'Failed to report damage' });
+  }
+};
+
+// Get transaction financial summary (for admins/debugging)
+export const getTransactionFinancials = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const transaction = await Transaction.findById(id)
+      .populate('item', 'title price')
+      .populate('lender', 'email')
+      .populate('borrower', 'email');
+    
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    
+    // Check if user is involved in transaction
+    const userId = req.userId;
+    if (transaction.lender._id.toString() !== userId && transaction.borrower._id.toString() !== userId) {
+      return res.status(403).json({ error: 'Not authorized to view financials' });
+    }
+    
+    const lendingFee = transaction.totalAmount - transaction.deposit;
+    const platformFee = calculatePlatformFee(lendingFee);
+    const lenderPayment = calculateLenderPayment(lendingFee);
+    
+    const financials = {
+      transactionId: transaction._id,
+      status: transaction.status,
+      itemTitle: transaction.item.title,
+      
+      // Original payment from borrower
+      totalPaidByBorrower: transaction.totalAmount,
+      lendingFee: lendingFee,
+      deposit: transaction.deposit,
+      
+      // Platform distribution (calculated)
+      platformFeeAmount: platformFee,
+      lenderPaymentAmount: lenderPayment,
+      
+      // Payment status
+      paymentToLenderReleased: transaction.paymentToLenderReleased,
+      
+      // Deposit handling
+      depositReturned: transaction.depositReturned,
+      damageReported: transaction.damageReported,
+      damageDescription: transaction.damageDescription,
+      depositRefundPercentage: transaction.depositRefundPercentage
+    };
+    
+    res.json(financials);
+  } catch (err) {
+    console.error('Error getting transaction financials:', err);
+    res.status(500).json({ error: 'Failed to get transaction financials' });
+  }
+};
+
+// Confirm no damage and process full deposit refund
+export const confirmNoDamage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+    
+    const transaction = await Transaction.findById(id).populate('item', 'title');
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    if (transaction.lender._id.toString() !== userId) return res.status(403).json({ error: 'Only lender can confirm no damage' });
+    if (!['returned'].includes(transaction.status)) return res.status(400).json({ error: 'Can only confirm no damage for returned transactions' });
+    if (transaction.depositReturned) return res.status(400).json({ error: 'Deposit already processed' });
+    if (transaction.damageReported) return res.status(400).json({ error: 'Damage already reported' });
+    
+    // Process full deposit refund (100% to borrower)
+    const depositToBorrower = transaction.deposit;
+    const depositToLender = 0;
+    
+    // Transfer full deposit back to borrower - Fixed Sandbox Account
+    const borrowerTransfer = await mockPayPalTransfer(
+      SANDBOX_ACCOUNTS.LOCALLOOP,
+      SANDBOX_ACCOUNTS.BORROWER,
+      depositToBorrower,
+      `Full deposit refund for "${transaction.item.title}" - No damage reported`
+    );
+    
+    transaction.depositRefundPercentage = 100; // No damage = 100% refund
+    transaction.depositReturned = true;
+    transaction.status = 'completed'; // Transaction completely finished after deposit resolution
+    await transaction.save();
+    
+    res.json({
+      success: true,
+      message: 'No damage confirmed and deposit refunded successfully',
+      depositDistribution: {
+        toLender: depositToLender,
+        toBorrower: depositToBorrower,
+        damageRefundPercentage: 100
+      }
+    });
+  } catch (err) {
+    console.error('Error confirming no damage:', err);
+    res.status(500).json({ error: 'Failed to confirm no damage' });
+  }
+};
+
