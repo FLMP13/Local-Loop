@@ -7,6 +7,10 @@ import {
   getAvatar,
   updateMe,
   changePassword,
+  getPremiumStatus,
+  upgradeToPremium,
+  cancelPremium,
+  setPremiumStatus,
   getUserById,
   getUserAvatar
 } from '../controllers/user.controller.js';
@@ -23,6 +27,12 @@ const setupRoutes = async () => {
   router.get('/:userId/avatar', getUserAvatar);
   router.put('/me', auth, upload.single('avatar'), updateMe);
   router.put('/me/password', auth, changePassword);
+  
+  // Premium routes
+  router.get('/me/premium', auth, getPremiumStatus);
+  router.post('/me/premium/upgrade', auth, upgradeToPremium);
+  router.post('/me/premium/cancel', auth, cancelPremium);
+  router.post('/me/premium/set-status', auth, setPremiumStatus);
 };
 setupRoutes();
 

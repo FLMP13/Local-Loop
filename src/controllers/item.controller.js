@@ -3,6 +3,7 @@ import ZipCode from '../models/zipCode.js';
 import User from '../models/user.js';
 import Transaction from '../models/transaction.js';
 import { getDistanceFromZip } from '../utils/yourDistanceUtil.js';
+import { checkListingLimit, isPremiumUser, calculateRentalPricing } from '../utils/premiumUtils.js';
 
 // This function looks up the ZIP code in the database and returns its coordinates
 async function getLocationFromZip(zipCode) {
@@ -37,11 +38,12 @@ export const getAllItems = async (req, res) => {
     let sortOption = {};
     if (sort === 'price_asc')  sortOption.price = 1;
     else if (sort === 'price_desc') sortOption.price = -1;
-    else sortOption._id = -1; // Default: Most Recent (newest first)
+    // Default: Priority sorting for premium users (premium items appear first)
+    else sortOption = { createdAt: -1 }; // Newest first as fallback
 
     const items = await Item.find(filter)
       .sort(sortOption)
-      .populate('owner', 'firstName lastName nickname email zipCode');
+      .populate('owner', 'firstName lastName nickname email zipCode premiumStatus');
 
     // Fetch the user's zip code from the DB if logged in
     let userZip = null;
@@ -50,16 +52,46 @@ export const getAllItems = async (req, res) => {
       userZip = user?.zipCode;
     }
 
-    // Calculate distance for each item based on the user's zip code and the item's owner's zip code
+    // Calculate distance and apply priority sorting for premium items
     const itemsWithDistance = await Promise.all(items.map(async item => {
       let distance = null;
       if (userZip && item.owner?.zipCode) {
         distance = await getDistanceFromZip(userZip, item.owner.zipCode);
       }
-      return { ...item.toObject(), distance };
+      
+      // Add premium status for priority sorting
+      const isOwnerPremium = isPremiumUser(item.owner);
+      
+      return { 
+        ...item.toObject(), 
+        distance,
+        isPremiumListing: isOwnerPremium
+      };
     }));
 
-    res.json(itemsWithDistance);
+    // Apply priority sorting: premium listings first (unless price sorting is specified)
+    let finalItems = itemsWithDistance;
+    if (!sort || (sort !== 'price_asc' && sort !== 'price_desc')) {
+      finalItems = itemsWithDistance.sort((a, b) => {
+        // 1. Premium listings come first
+        if (a.isPremiumListing && !b.isPremiumListing) return -1;
+        if (!a.isPremiumListing && b.isPremiumListing) return 1;
+        
+        // 2. Among premium items: sort by view count (higher views = more popular)
+        if (a.isPremiumListing && b.isPremiumListing) {
+          if (b.viewCount !== a.viewCount) {
+            return b.viewCount - a.viewCount; // Higher views first
+          }
+          // 3. If same view count: newer first
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        }
+        
+        // 4. Among non-premium items: newer first
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+    }
+
+    res.json(finalItems);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -68,6 +100,25 @@ export const getAllItems = async (req, res) => {
 // Create a new item with images and store it in the database including availability and location
 export const createItem = async (req, res) => {
   try {
+    // Check listing limit before creating the item
+    const limitCheck = await checkListingLimit(req.userId);
+    if (!limitCheck.allowed) {
+      const message = limitCheck.isPremium 
+        ? 'Your premium plan has expired or there was an error. Please check your subscription status.'
+        : 'You have reached the free user limit of 3 listings. Upgrade to premium for unlimited listings or remove some existing listings.';
+        
+      return res.status(403).json({ 
+        error: 'Listing limit exceeded',
+        code: 'LISTING_LIMIT_EXCEEDED',
+        details: {
+          currentListings: limitCheck.currentCount,
+          maxListings: limitCheck.maxAllowed,
+          isPremium: limitCheck.isPremium,
+          message
+        }
+      });
+    }
+
     let availability = [];
     if (req.body.availability) {
       availability = JSON.parse(req.body.availability);
@@ -152,15 +203,44 @@ export const getItemById = async (req, res) => {
 
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
+    // Increment view count for all views except when the owner views their own item
+    const isOwnerViewing = req.userId && req.userId === item.owner._id.toString();
+    if (!isOwnerViewing) {
+      await Item.findByIdAndUpdate(req.params.id, { $inc: { viewCount: 1 } });
+    }
+
     let distance = null;
-    if (req.userId && item.owner?.zipCode) {
-      const user = await User.findById(req.userId, 'zipCode');
-      if (user?.zipCode) {
+    let pricing = null;
+    
+    if (req.userId) {
+      const user = await User.findById(req.userId, 'zipCode premiumStatus');
+      
+      // Calculate distance if both users have zip codes
+      if (user?.zipCode && item.owner?.zipCode) {
         distance = await getDistanceFromZip(user.zipCode, item.owner.zipCode);
+      }
+      
+      // Calculate premium pricing for the viewing user
+      if (user && !isOwnerViewing) {
+        pricing = calculateRentalPricing(item.price, null, null, user);
       }
     }
 
-    res.json({ ...item, distance });
+    res.json({ 
+      ...item, 
+      distance,
+      pricing: pricing || {
+        originalPrice: item.price,
+        finalPrice: item.price,
+        discountRate: 0,
+        discountAmount: 0,
+        isPremium: false,
+        weeklyRate: {
+          original: item.price,
+          final: item.price
+        }
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -211,15 +291,42 @@ export const updateItemStatus = async (req, res) => {
   }
 };
 
-// Get all items owned by the logged-in user
+// Get user's own items with premium analytics
 export const getMyItems = async (req, res) => {
   try {
-    const filter = { owner: req.userId };
-    if (req.query.status) {
-      filter.status = req.query.status;
+    // Get user to check premium status
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
-    const items = await Item.find(filter).populate('owner', 'firstName lastName nickname email zipCode');
-    res.status(200).json(items);
+
+    // Get user's items with owner info populated
+    const items = await Item.find({ owner: req.userId })
+      .populate('owner', 'firstName lastName nickname email zipCode premiumStatus')
+      .lean();
+
+    // If user is premium, include view counts and analytics
+    if (isPremiumUser(user)) {
+      // For premium users, include full analytics
+      const itemsWithAnalytics = items.map(item => ({
+        ...item,
+        viewCount: item.viewCount || 0,
+        isPremiumAnalytics: true
+      }));
+      
+      res.json(itemsWithAnalytics);
+    } else {
+      // For free users, exclude view counts
+      const itemsWithoutAnalytics = items.map(item => {
+        const { viewCount, ...itemWithoutViews } = item;
+        return {
+          ...itemWithoutViews,
+          isPremiumAnalytics: false
+        };
+      });
+      
+      res.json(itemsWithoutAnalytics);
+    }
   } catch (error) {
     console.error('getMyItems error:', error);
     res.status(500).json({ error: error.message });
