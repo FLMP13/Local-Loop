@@ -10,7 +10,9 @@ import {
   getPremiumStatus,
   upgradeToPremium,
   cancelPremium,
-  setPremiumStatus
+  setPremiumStatus,
+  getUserById,
+  getUserAvatar
 } from '../controllers/user.controller.js';
 
 const router = express.Router();
@@ -21,6 +23,8 @@ const setupRoutes = async () => {
 
   router.get('/me', auth, getMe);
   router.get('/me/avatar', auth, getAvatar);
+  router.get('/:userId', getUserById);
+  router.get('/:userId/avatar', getUserAvatar);
   router.put('/me', auth, upload.single('avatar'), updateMe);
   router.put('/me/password', auth, changePassword);
   
