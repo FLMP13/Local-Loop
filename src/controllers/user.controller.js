@@ -1,8 +1,10 @@
 // \Backend\src\controllers\user.controller.js
 // Import user model and necessary libraries
 import User from '../models/user.js';
+import Subscription from '../models/subscription.js';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
+import { isPremiumUser, getMaxListings, getUserDiscountRate } from '../utils/premiumUtils.js';
 
 // Function to get the currently logged-in user's details
 export async function getMe(req, res) {
@@ -41,7 +43,39 @@ export async function updateMe(req, res) {
     for (let field of ['nickname','email','zipCode','bio']) {
       if (req.body[field] != null) updates[field] = req.body[field];
     }
-    if (req.file?.id) updates.profilePic = req.file.id;
+    
+    // Handle avatar deletion
+    if (req.body.deleteAvatar === 'true') {
+      // Get the current user to check if they have a profile pic to delete
+      const currentUser = await User.findById(req.userId).select('profilePic');
+      if (currentUser?.profilePic) {
+        // Delete the file from GridFS
+        const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+          bucketName: 'profilePics'
+        });
+        try {
+          await bucket.delete(currentUser.profilePic);
+        } catch (deleteErr) {
+          console.warn('Could not delete old profile pic:', deleteErr);
+        }
+      }
+      updates.profilePic = null; // Remove profile pic reference
+    } else if (req.file?.id) {
+      // Handle avatar upload (existing logic)
+      // First delete the old avatar if it exists
+      const currentUser = await User.findById(req.userId).select('profilePic');
+      if (currentUser?.profilePic) {
+        const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+          bucketName: 'profilePics'
+        });
+        try {
+          await bucket.delete(currentUser.profilePic);
+        } catch (deleteErr) {
+          console.warn('Could not delete old profile pic:', deleteErr);
+        }
+      }
+      updates.profilePic = req.file.id;
+    }
 
     const user = await User.findByIdAndUpdate(
       req.userId,
@@ -76,5 +110,126 @@ export async function changePassword(req, res) {
   } catch (err) {
     console.error('changePassword error:', err);
     res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Function to get the current user's premium status and limits
+export async function getPremiumStatus(req, res) {
+  try {
+    const user = await User.findById(req.userId).select('premiumStatus');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Get active subscription details
+    const subscription = await Subscription.findOne({
+      user: req.userId,
+      status: 'active'
+    });
+
+    const isPremium = isPremiumUser(user);
+    const maxListings = getMaxListings(user);
+    const discountRate = getUserDiscountRate(user);
+
+    res.json({
+      isPremium,
+      premiumStatus: user.premiumStatus,
+      subscription: subscription ? {
+        plan: subscription.plan,
+        startDate: subscription.startDate,
+        endDate: subscription.endDate,
+        nextBillingDate: subscription.nextBillingDate,
+        paypalSubscriptionId: subscription.paypalSubscriptionId
+      } : null,
+      maxListings,
+      discountRate
+    });
+  } catch (err) {
+    console.error('getPremiumStatus error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Function to upgrade user to premium (redirects to subscription controller)
+export async function upgradeToPremium(req, res) {
+  // This function is kept for backward compatibility
+  // New implementations should use /api/subscriptions/create
+  try {
+    const { createSubscription } = await import('./subscription.controller.js');
+    await createSubscription(req, res);
+  } catch (err) {
+    console.error('upgradeToPremium error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Function to cancel premium subscription (redirects to subscription controller)
+export async function cancelPremium(req, res) {
+  // This function is kept for backward compatibility
+  // New implementations should use /api/subscriptions/cancel
+  try {
+    const { cancelSubscription } = await import('./subscription.controller.js');
+    await cancelSubscription(req, res);
+  } catch (err) {
+    console.error('cancelPremium error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Function to set premium status (for testing/admin)
+export async function setPremiumStatus(req, res) {
+  try {
+    const { premiumStatus } = req.body;
+    
+    if (!['active', 'inactive', 'cancelled'].includes(premiumStatus)) {
+      return res.status(400).json({ error: 'Invalid premium status' });
+    }
+    
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      { 
+        $set: { 
+          premiumStatus: premiumStatus,
+          premiumStartDate: premiumStatus === 'active' ? new Date() : undefined,
+          premiumEndDate: premiumStatus === 'active' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : undefined // 30 days from now
+        }
+      },
+      { new: true, select: '-passwordHash -__v' }
+    );
+    
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    res.json(user);
+  } catch (err) {
+    console.error('setPremiumStatus error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Function to get public user profile by ID
+export async function getUserById(req, res) {
+  try {
+    const user = await User.findById(req.params.userId).select('-passwordHash -__v -email');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    console.error('getUserById error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Function to get public user avatar by ID
+export async function getUserAvatar(req, res) {
+  try {
+    const user = await User.findById(req.params.userId).select('profilePic');
+    if (!user || !user.profilePic) return res.status(404).end();
+
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: 'profilePics'
+    });
+    const stream = bucket.openDownloadStream(user.profilePic);
+    stream.on('error', () => res.status(404).end());
+    stream.pipe(res);
+  } catch (err) {
+    console.error('getUserAvatar error:', err);
+    res.status(500).end();
   }
 }

@@ -11,7 +11,13 @@ const userSchema = new mongoose.Schema({
   zipCode:     { type: String, required: true },
   bio:         { type: String, required: false },
   profilePic:  { type: mongoose.Schema.Types.ObjectId, ref: 'profilePics.files', required: false },
-  subscription:{ type: String, enum: ['free','premium'], default: 'free' },
+
+  // Premium status (computed from active subscription)
+  premiumStatus: {
+    type: String, 
+    enum: ['active', 'inactive', 'expired'], 
+    default: 'inactive'
+  },
   lenderRating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 }},
   borrowerRating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 }}
 }, { timestamps: true });

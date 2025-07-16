@@ -1,6 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import config from './config/config.js';
 import cors from 'cors';
 import './models/user.js';           // register User model
 import './models/zipCode.js';        // register ZipCode model
@@ -10,7 +10,6 @@ import connectDB from './config/db.js';
 import loadZipCodes from './utils/loadZipCodes.js';
 import apiRouter from './routes/index.routes.js';
 
-dotenv.config();
 
 const app = express();
 app.use(cors()); // Enable CORS for all routes
@@ -40,8 +39,8 @@ connectDB()
         .json({ error: err.message || 'Server error' });
     });
 
-    app.listen(process.env.PORT, () => {
-      console.log(`Server listening on http://localhost:${process.env.PORT}`);
+    app.listen(config.PORT, () => {
+      console.log(`Server listening on http://localhost:${config.PORT}`);
     });
   })
   .catch(err => {

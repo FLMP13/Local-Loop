@@ -69,6 +69,10 @@ const itemSchema = new mongoose.Schema({
             }
         ],
         default: []
+    },
+    viewCount: {
+        type: Number,
+        default: 0
     }
 });
 
