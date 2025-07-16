@@ -110,3 +110,33 @@ export async function changePassword(req, res) {
     res.status(500).json({ error: 'Server error' });
   }
 }
+
+// Function to get public user profile by ID
+export async function getUserById(req, res) {
+  try {
+    const user = await User.findById(req.params.userId).select('-passwordHash -__v -email');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    console.error('getUserById error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Function to get public user avatar by ID
+export async function getUserAvatar(req, res) {
+  try {
+    const user = await User.findById(req.params.userId).select('profilePic');
+    if (!user || !user.profilePic) return res.status(404).end();
+
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: 'profilePics'
+    });
+    const stream = bucket.openDownloadStream(user.profilePic);
+    stream.on('error', () => res.status(404).end());
+    stream.pipe(res);
+  } catch (err) {
+    console.error('getUserAvatar error:', err);
+    res.status(500).end();
+  }
+}
