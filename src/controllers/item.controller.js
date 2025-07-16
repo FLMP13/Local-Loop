@@ -37,6 +37,7 @@ export const getAllItems = async (req, res) => {
     let sortOption = {};
     if (sort === 'price_asc')  sortOption.price = 1;
     else if (sort === 'price_desc') sortOption.price = -1;
+    else sortOption._id = -1; // Default: Most Recent (newest first)
 
     const items = await Item.find(filter)
       .sort(sortOption)
@@ -268,6 +269,7 @@ export const getNearbyItems = async (req, res) => {
     let sortOption = {};
     if (sort === 'price_asc')      sortOption.price = 1;
     else if (sort === 'price_desc') sortOption.price = -1;
+    else sortOption._id = -1; // Default: Most Recent (newest first)
 
     // Query & Respond ──────────────────────────────────────
     const items = await Item
