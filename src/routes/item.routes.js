@@ -21,7 +21,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { files: 3 } })
 router.get('/mine',          auth, getMyItems); // Get items owned by the authenticated user
 router.get('/nearby',        auth, getNearbyItems);   // Items within radius (km)
 router.get('/:id/image/:index', getItemImage); // Get specific image of an item by index
-router.get('/:id',           getItemById); // Get item by ID
+router.get('/:id',           auth, getItemById); // Get item by ID (optional auth for distance calculation)
 router.get('/',              auth, getAllItems); // Get all items
 router.get('/:id/unavailable', getUnavailablePeriods); // Get unavailable periods of an item by ID
 
