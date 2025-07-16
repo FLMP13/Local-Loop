@@ -43,15 +43,6 @@ export async function login(req, res, next) {
     }
     const token = jwt.sign({ sub: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
     
-    // Debug: Log user data to see what's available
-    console.log('User data from database:', {
-      id: user._id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      nickname: user.nickname,
-      email: user.email
-    });
-    
     res.json({ 
       token, 
       user: { 

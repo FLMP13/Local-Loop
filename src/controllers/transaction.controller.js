@@ -1,6 +1,8 @@
 import Transaction from '../models/transaction.js';
 import Item from '../models/item.js';
+import User from '../models/user.js';
 import crypto from 'crypto';
+import { getUserPriorityStatus, isPremiumUser, calculateRentalPricing, getUserDiscountRate } from '../utils/premiumUtils.js';
 
 // PayPal Sandbox Account Configuration
 const SANDBOX_ACCOUNTS = {
@@ -39,7 +41,7 @@ function calculateLenderPayment(lendingFee) {
   return lendingFee * 0.95;
 }
 
-// Helper function to calculate lending fee based on duration and weekly rate
+// Helper function to calculate lending fee based on duration and weekly rate (legacy)
 function computeWeeklyCharge(from, to, weeklyRate) {
   const days = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
   const weeks = Math.ceil(days / 7);
@@ -105,14 +107,42 @@ export async function getMyBorrowings(req, res) {
         populate: { path: 'owner', select: 'nickname email' }
       })
       .populate('lender', 'nickname email')
-      .populate('borrower', 'nickname email');
-    res.json(transactions);
+      .populate('borrower', 'nickname email firstName lastName premiumStatus');
+
+    // Enhanced transaction mapping with pricing information for borrowings
+    const enhancedTransactions = transactions.map(t => {
+      let pricing = null;
+      try {
+        if (t.borrower && t.item && t.item.price !== undefined && t.item.price !== null && t.requestedFrom && t.requestedTo) {
+          pricing = calculateRentalPricing(t.item.price, t.requestedFrom, t.requestedTo, t.borrower);
+        } else {
+          console.log('Skipping pricing calculation for transaction:', t._id, {
+            hasBorrower: !!t.borrower,
+            hasItem: !!t.item,
+            hasPrice: t.item?.price !== undefined && t.item?.price !== null,
+            hasRequestedFrom: !!t.requestedFrom,
+            hasRequestedTo: !!t.requestedTo
+          });
+        }
+      } catch (pricingError) {
+        console.error('Error calculating pricing for transaction:', t._id, pricingError);
+        pricing = null;
+      }
+      
+      return {
+        ...t.toObject(),
+        pricing
+      };
+    });
+
+    res.json(enhancedTransactions);
   } catch (err) {
+    console.error('Error in getMyBorrowings:', err);
     res.status(500).json({ error: 'Failed to fetch borrowings.' });
   }
 }
 
-// Get all transactions where user is lender
+// Get all transactions where user is lender (with priority sorting for premium borrowers)
 export async function getMyLendings(req, res) {
   try {
     const transactions = await Transaction.find({ lender: req.userId })
@@ -120,9 +150,54 @@ export async function getMyLendings(req, res) {
         path: 'item',
         populate: { path: 'owner', select: 'nickname email' }
       })
-      .populate('borrower', 'nickname email')
+      .populate('borrower', 'nickname email firstName lastName premiumStatus')
       .populate('lender', 'nickname email'); 
-    res.json(transactions);
+
+    // Sort by premium status first, then by request date
+    transactions.sort((a, b) => {
+      // First by premium status (Premium first)
+      const aIsPremium = isPremiumUser(a.borrower) ? 1 : 0;
+      const bIsPremium = isPremiumUser(b.borrower) ? 1 : 0;
+      if (aIsPremium !== bIsPremium) {
+        return bIsPremium - aIsPremium;
+      }
+      
+      // Then by request date (newer first)
+      const aDate = new Date(a.requestDate || a.requestedFrom).getTime();
+      const bDate = new Date(b.requestDate || b.requestedFrom).getTime();
+      return bDate - aDate;
+    });
+
+    // Enhanced transaction mapping with pricing information
+    const enhancedTransactions = transactions.map(t => {
+      let pricing = null;
+      if (t.borrower && t.item && t.requestedFrom && t.requestedTo) {
+        const days = Math.ceil((new Date(t.requestedTo) - new Date(t.requestedFrom)) / (1000 * 60 * 60 * 24)) + 1;
+        const weeks = Math.ceil(days / 7);
+        const baseTotal = weeks * t.item.price;
+        const discountRate = getUserDiscountRate(t.borrower);
+        const discountAmount = baseTotal * (discountRate / 100);
+        
+        pricing = {
+          originalPrice: baseTotal,
+          finalPrice: baseTotal - discountAmount,
+          discountRate: discountRate,
+          discountAmount: discountAmount,
+          isPremium: isPremiumUser(t.borrower),
+          weeklyRate: {
+            original: t.item.price,
+            final: t.item.price * (1 - discountRate / 100)
+          }
+        };
+      }
+      
+      return {
+        ...t.toObject(),
+        pricing
+      };
+    });
+
+    res.json(enhancedTransactions);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch lendings.' });
   }
@@ -198,7 +273,7 @@ export async function getPaymentSummary(req, res) {
     const transaction = await Transaction.findById(req.params.id)
       .populate('item', 'title price')
       .populate('lender', 'firstName lastName')
-      .populate('borrower', 'firstName lastName');
+      .populate('borrower', 'firstName lastName premiumStatus premiumStartDate premiumEndDate');
 
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
@@ -209,13 +284,34 @@ export async function getPaymentSummary(req, res) {
       return res.status(403).json({ error: 'Not authorized to view this transaction.' });
     }
 
-    // Calculate deposit and total amount
+    // Calculate deposit and total amount with premium discount
     const deposit = (transaction.item ? transaction.item.price : 0) * 5;
-    const totalAmount = computeWeeklyCharge(
-      transaction.requestedFrom, 
-      transaction.requestedTo, 
-      transaction.item ? transaction.item.price : 0
-    ) + deposit;
+    
+    // Use stored pricing if available (transaction was already paid), otherwise calculate fresh
+    let pricing, totalAmount, lendingFee;
+    
+    if (transaction.finalLendingFee) {
+      // Use stored values from completed payment
+      lendingFee = transaction.finalLendingFee;
+      totalAmount = transaction.totalAmount;
+      pricing = {
+        originalPrice: transaction.originalLendingFee || lendingFee,
+        finalPrice: lendingFee,
+        discountRate: transaction.discountRate || 0,
+        discountAmount: transaction.discountApplied || 0,
+        isPremium: transaction.isPremiumTransaction || false
+      };
+    } else {
+      // Calculate fresh pricing (for new transactions)
+      pricing = calculateRentalPricing(
+        transaction.item ? transaction.item.price : 0,
+        transaction.requestedFrom,
+        transaction.requestedTo,
+        transaction.borrower
+      );
+      lendingFee = pricing.finalPrice;
+      totalAmount = parseFloat((lendingFee + deposit).toFixed(2));
+    }
 
     const summary = {
       id: transaction._id,
@@ -224,14 +320,26 @@ export async function getPaymentSummary(req, res) {
       itemPrice: transaction.item ? transaction.item.price : 0, // Weekly rate
       deposit: deposit,
       totalAmount: totalAmount,
+      lendingFee: lendingFee,
       lender: transaction.lender ? (transaction.lender.firstName + ' ' + transaction.lender.lastName) : 'Unknown Lender',
       status: transaction.status,
       requestDate: transaction.requestDate,
       requestedFrom: transaction.requestedFrom,
       requestedTo: transaction.requestedTo
     };
+
+    // Add premium discount info if applicable
+    if (pricing.discountRate > 0) {
+      summary.premiumDiscount = {
+        originalAmount: pricing.originalPrice,
+        discountRate: pricing.discountRate,
+        discountAmount: pricing.discountAmount,
+        finalAmount: pricing.finalPrice
+      };
+    }
   
     // Return the summary
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(summary);
   } catch (err) {
     console.error(err);
@@ -242,22 +350,32 @@ export async function getPaymentSummary(req, res) {
 // Update transaction status after payment completion
 export async function completePayment(req, res) {
   try {
-    const transaction = await Transaction.findById(req.params.id).populate('item');
+    // Check if user is authenticated
+    if (!req.userId) {
+      return res.status(401).json({ error: 'Authentication required to complete payment.' });
+    }
+
+    const transaction = await Transaction.findById(req.params.id)
+      .populate('item')
+      .populate('borrower', 'premiumStatus'); // Populate borrower to get premium status
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
-    if (transaction.borrower.toString() !== req.userId) {
+    if (transaction.borrower._id.toString() !== req.userId) {
       return res.status(403).json({ error: 'Only the borrower can complete payment.' });
     }
 
-    // Calculate financial details for payment completion
+    // Calculate financial details for payment completion with premium discount
     const deposit = transaction.item.price * 5;
-    const lendingFee = computeWeeklyCharge(
+    const pricing = calculateRentalPricing(
+      transaction.item.price,
       transaction.requestedFrom, 
       transaction.requestedTo, 
-      transaction.item.price
+      transaction.borrower
     );
-    const totalAmount = lendingFee + deposit;
+    
+    const lendingFee = pricing.finalPrice;
+    const totalAmount = parseFloat((lendingFee + deposit).toFixed(2));
     const platformFee = calculatePlatformFee(lendingFee);
 
     // Update transaction with financial details and status
@@ -265,9 +383,16 @@ export async function completePayment(req, res) {
     transaction.deposit = deposit;
     transaction.totalAmount = totalAmount;
     
+    // Store pricing information for future reference
+    transaction.finalLendingFee = lendingFee; // The actual fee after discounts
+    transaction.originalLendingFee = pricing.originalPrice; // Original price before discount
+    transaction.discountApplied = pricing.discountAmount; // How much discount was applied
+    transaction.discountRate = pricing.discountRate; // Discount percentage
+    transaction.isPremiumTransaction = pricing.isPremium; // Was premium discount applied
+    
     await transaction.save();
     
-    res.json({ 
+    const response = { 
       message: 'Payment completed successfully', 
       status: 'paid',
       deposit: deposit,
@@ -280,7 +405,19 @@ export async function completePayment(req, res) {
         willReleaseToLender: calculateLenderPayment(lendingFee),
         depositHeld: deposit
       }
-    });
+    };
+
+    // Add premium discount info if applicable
+    if (pricing.discountRate > 0) {
+      response.premiumDiscount = {
+        originalAmount: pricing.originalPrice,
+        discountRate: pricing.discountRate,
+        discountAmount: pricing.discountAmount,
+        finalAmount: pricing.finalPrice
+      };
+    }
+    
+    res.json(response);
   } catch (err) {
     console.error('Error completing payment:', err);
     res.status(500).json({ error: 'Failed to complete payment' });
@@ -562,8 +699,8 @@ export async function usePickupCode(req, res) {
       return res.status(400).json({ error: 'Incorrect code.' });
     }
 
-    // Calculate payments
-    const lendingFee = transaction.totalAmount - transaction.deposit;
+    // Calculate payments - use stored final lending fee (after discounts)
+    const lendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
     const paymentToLender = calculateLenderPayment(lendingFee);
     const platformFee = calculatePlatformFee(lendingFee);
     
@@ -608,8 +745,8 @@ export async function forcePickup(req, res) {
     if (transaction.status !== 'paid') return res.status(400).json({ error: 'Cannot force pickup at this stage.' });
     if (transaction.borrower.toString() !== req.userId) return res.status(403).json({ error: 'Not authorized.' });
 
-    // Calculate payments
-    const lendingFee = transaction.totalAmount - transaction.deposit;
+    // Calculate payments - use stored final lending fee (after discounts)
+    const lendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
     const paymentToLender = calculateLenderPayment(lendingFee);
     const platformFee = calculatePlatformFee(lendingFee);
     
@@ -693,13 +830,6 @@ export const reportDamage = async (req, res) => {
     transaction.status = 'completed'; // Transaction completely finished after deposit resolution
     await transaction.save();
     
-    console.log('Backend: After damage processing, transaction', transaction._id, {
-      status: transaction.status,
-      depositReturned: transaction.depositReturned,
-      depositRefundPercentage: transaction.depositRefundPercentage,
-      damageReported: transaction.damageReported
-    });
-
     res.json({
       success: true,
       message: 'Damage reported and deposit processed successfully',
@@ -739,7 +869,7 @@ export const getTransactionFinancials = async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to view financials' });
     }
     
-    const lendingFee = transaction.totalAmount - transaction.deposit;
+    const lendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
     const platformFee = calculatePlatformFee(lendingFee);
     const lenderPayment = calculateLenderPayment(lendingFee);
     

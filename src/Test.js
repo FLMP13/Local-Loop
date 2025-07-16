@@ -24,7 +24,7 @@ async function seed() {
       nickname:    'theadmin',
       email:       'admin@localhost',
       passwordHash,
-      subscription:'premium',
+      premiumStatus: 'active',
        zipCode:     '12345',
     });
     console.log('✅  Admin user created with email=admin@localhost');
