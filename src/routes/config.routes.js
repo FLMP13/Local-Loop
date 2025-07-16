@@ -17,14 +17,14 @@ router.get("/paypal/plans", auth, (req, res) => {
   res.json({
     plans: {
       monthly: {
-        id: process.env.PAYPAL_MONTHLY_PLAN_ID || "P-3TT94183MC487024WNB3IRKI",
+        id: config.PAYPAL_MONTHLY_PLAN_ID || "P-3TT94183MC487024WNB3IRKI",
         name: "Premium Monthly",
         price: "3.99",
         currency: "EUR",
         interval: "MONTH",
       },
       yearly: {
-        id: process.env.PAYPAL_YEARLY_PLAN_ID || "P-0JY26374DB1999900NB3IRKI",
+        id: config.PAYPAL_YEARLY_PLAN_ID || "P-0JY26374DB1999900NB3IRKI",
         name: "Premium Yearly", 
         price: "35.99",
         currency: "EUR",
