@@ -36,7 +36,7 @@ function calculatePlatformFee(lendingFee) {
   return lendingFee * 0.05;
 }
 
-// Calculate payment to lender (95% of lending fee)
+// Calculate payment to lender (95% of lending fee before any discounts)
 function calculateLenderPayment(lendingFee) {
   return lendingFee * 0.95;
 }
@@ -699,10 +699,11 @@ export async function usePickupCode(req, res) {
       return res.status(400).json({ error: 'Incorrect code.' });
     }
 
-    // Calculate payments - use stored final lending fee (after discounts)
-    const lendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
-    const paymentToLender = calculateLenderPayment(lendingFee);
-    const platformFee = calculatePlatformFee(lendingFee);
+    // Calculate payments - use original lending fee (before discounts) for lender payment
+    const finalLendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
+    const originalLendingFee = transaction.originalLendingFee || finalLendingFee;
+    const paymentToLender = calculateLenderPayment(originalLendingFee);
+    const platformFee = calculatePlatformFee(finalLendingFee);
     
     // Perform PayPal transfer to lender (95% of lending fee) - Fixed Sandbox Account
     const transferResult = await mockPayPalTransfer(
@@ -745,10 +746,11 @@ export async function forcePickup(req, res) {
     if (transaction.status !== 'paid') return res.status(400).json({ error: 'Cannot force pickup at this stage.' });
     if (transaction.borrower.toString() !== req.userId) return res.status(403).json({ error: 'Not authorized.' });
 
-    // Calculate payments - use stored final lending fee (after discounts)
-    const lendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
-    const paymentToLender = calculateLenderPayment(lendingFee);
-    const platformFee = calculatePlatformFee(lendingFee);
+    // Calculate payments - use original lending fee (before discounts) for lender payment
+    const finalLendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
+    const originalLendingFee = transaction.originalLendingFee || finalLendingFee;
+    const paymentToLender = calculateLenderPayment(originalLendingFee);
+    const platformFee = calculatePlatformFee(finalLendingFee);
     
     // Perform PayPal transfer to lender - Fixed Sandbox Account
     const transferResult = await mockPayPalTransfer(
@@ -869,9 +871,10 @@ export const getTransactionFinancials = async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to view financials' });
     }
     
-    const lendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
-    const platformFee = calculatePlatformFee(lendingFee);
-    const lenderPayment = calculateLenderPayment(lendingFee);
+    const finalLendingFee = transaction.finalLendingFee || (transaction.totalAmount - transaction.deposit);
+    const originalLendingFee = transaction.originalLendingFee || finalLendingFee;
+    const platformFee = calculatePlatformFee(finalLendingFee);
+    const lenderPayment = calculateLenderPayment(originalLendingFee);
     
     const financials = {
       transactionId: transaction._id,
@@ -880,10 +883,13 @@ export const getTransactionFinancials = async (req, res) => {
       
       // Original payment from borrower
       totalPaidByBorrower: transaction.totalAmount,
-      lendingFee: lendingFee,
+      lendingFee: finalLendingFee,
+      originalLendingFee: originalLendingFee,
       deposit: transaction.deposit,
       
       // Platform distribution (calculated)
+      // Note: Platform fee is 5% of final lending fee (after discount)
+      // Lender payment is 95% of original lending fee (before discount)
       platformFeeAmount: platformFee,
       lenderPaymentAmount: lenderPayment,
       
