@@ -47,6 +47,9 @@ services:
     build:
       context: ./Frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://localhost:8080/api  # API requests will go through nginx proxy
+        REACT_APP_PAYPAL_CLIENT_ID: "AXP0w_XIqcSbu3OdhrghpzVSIDbxSDiWHSXEc7leSJmnEeqD11GJYP3swV_ppwaxcYcJzTCN7gIN3xFc"
     container_name: localloop-frontend
     restart: unless-stopped
     ports:
