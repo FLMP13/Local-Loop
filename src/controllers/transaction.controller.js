@@ -98,6 +98,36 @@ export async function requestLend(req, res) {
   }
 }
 
+// Get all transactions for the authenticated user (both as borrower and lender)
+export async function getAllTransactions(req, res) {
+  try {
+    const borrowings = await Transaction.find({ borrower: req.userId })
+      .populate({
+        path: 'item',
+        populate: { path: 'owner', select: 'nickname email' }
+      })
+      .populate('lender', 'nickname email')
+      .populate('borrower', 'nickname email firstName lastName premiumStatus');
+
+    const lendings = await Transaction.find({ lender: req.userId })
+      .populate({
+        path: 'item',
+        populate: { path: 'owner', select: 'nickname email' }
+      })
+      .populate('lender', 'nickname email')
+      .populate('borrower', 'nickname email firstName lastName premiumStatus');
+
+    // Combine and sort by creation date (newest first)
+    const allTransactions = [...borrowings, ...lendings]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(allTransactions);
+  } catch (err) {
+    console.error('Error in getAllTransactions:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 // Get all transactions where user is borrower
 export async function getMyBorrowings(req, res) {
   try {
