@@ -2,6 +2,7 @@ import express from 'express';
 import auth from '../middleware/auth.js';
 import {
   requestLend,
+  getAllTransactions,
   getMyBorrowings,
   getMyLendings,
   getTransactionById,
@@ -28,6 +29,7 @@ import {
 
 const router = express.Router();
 
+router.get('/', auth, getAllTransactions);
 router.post('/request', auth, requestLend);
 router.get('/borrowings', auth, getMyBorrowings);
 router.get('/lendings', auth, getMyLendings);
