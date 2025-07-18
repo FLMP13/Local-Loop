@@ -1,3 +1,5 @@
+// src/controllers/auth.controller.js
+// This file contains the authentication controller logic
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
