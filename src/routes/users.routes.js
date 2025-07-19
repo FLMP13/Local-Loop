@@ -17,10 +17,12 @@ import {
 
 const router = express.Router();
 
+// Setup routes for user-related operations
 const setupRoutes = async () => {
   const storage = await gridFsFactory({ bucketName: 'profilePics' });
   const upload = multer({ storage });
 
+  // User routes
   router.get('/me', auth, getMe);
   router.get('/me/avatar', auth, getAvatar);
   router.get('/:userId', getUserById);

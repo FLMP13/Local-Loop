@@ -13,7 +13,6 @@ const SANDBOX_ACCOUNTS = {
 
 // PayPal Sandbox Transfer Simulation
 async function mockPayPalTransfer(fromAccount, toAccount, amount, description) {
-  // For sandbox: Simulation without logging
   
   const transferId = `MOCK_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   
@@ -64,6 +63,7 @@ export async function requestLend(req, res) {
       return res.status(400).json({ error: 'You cannot request your own item.' });
     }
 
+    // Check for overlapping transactions
     const overlapping = await Transaction.findOne({
       item: req.body.item,
       status: { $in: ['accepted', 'borrowed'] },
@@ -78,6 +78,7 @@ export async function requestLend(req, res) {
       return res.status(400).json({ error: 'This time slot is already booked.' });
     }
 
+    // Create the transaction
     const transaction = await Transaction.create({
       item: itemId,
       lender: item.owner,
@@ -296,8 +297,7 @@ export async function declineTransaction(req, res) {
   }
 }
 
-//Get payment summaries for transactions
-// This function retrieves a summary of transactions for a specific user
+// Get payment summaries for transactions 
 export async function getPaymentSummary(req, res) {
   try {
     const transaction = await Transaction.findById(req.params.id)
@@ -309,7 +309,7 @@ export async function getPaymentSummary(req, res) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    //Has each user access to the transaction
+    // Check if each user has access to the transaction
     if (transaction.lender._id.toString() !== req.userId && transaction.borrower._id.toString() !== req.userId) {
       return res.status(403).json({ error: 'Not authorized to view this transaction.' });
     }
@@ -342,7 +342,7 @@ export async function getPaymentSummary(req, res) {
       lendingFee = pricing.finalPrice;
       totalAmount = parseFloat((lendingFee + deposit).toFixed(2));
     }
-
+    // Prepare summary
     const summary = {
       id: transaction._id,
       borrower: transaction.borrower ? (transaction.borrower.firstName + ' ' + transaction.borrower.lastName) : 'Unknown Borrower', 
@@ -459,8 +459,6 @@ export async function completeTransaction(req, res) {
     const transaction = await Transaction.findById(req.params.id).populate('item');
     if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
     
-    // Only borrower can mark as completed (Do we want to keep it like this or change it to lender?)
-    // My thinking was, that this way the borrower will be more likely to return the item on time as he will not get his deposit back if he does not return the item on time.
     if (transaction.borrower.toString() !== req.userId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
@@ -510,6 +508,7 @@ export async function renegotiateTransaction(req, res) {
   }
 }
 
+// Accept or decline a renegotiation request
 export async function acceptRenegotiation(req, res) {
   try {
     const { id } = req.params;
@@ -533,6 +532,7 @@ export async function acceptRenegotiation(req, res) {
   }
 }
 
+// Decline a renegotiation request
 export async function declineRenegotiation(req, res) {
   try {
     const { id } = req.params;
@@ -603,7 +603,7 @@ export const retractTransaction = async (req, res) => {
 // Generate return code for a transaction
 export const generateReturnCode = async (req, res) => {
   const { id } = req.params;
-  const userId = req.userId; // FIXED
+  const userId = req.userId;
   const tx = await Transaction.findById(id);
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (tx.lender.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
@@ -611,7 +611,7 @@ export const generateReturnCode = async (req, res) => {
 
   // Generate code if not already generated
   if (!tx.returnCodeGenerated) {
-    tx.returnCode = crypto.randomBytes(3).toString('hex').toUpperCase(); // e.g. "A1B2C3"
+    tx.returnCode = crypto.randomBytes(3).toString('hex').toUpperCase();
     tx.returnCodeGenerated = true;
     await tx.save();
   }
@@ -622,7 +622,7 @@ export const generateReturnCode = async (req, res) => {
 export const submitReturnCode = async (req, res) => {
   const { id } = req.params;
   const { code } = req.body;
-  const userId = req.userId; // FIXED
+  const userId = req.userId; 
   const tx = await Transaction.findById(id).populate('item', 'title');
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (tx.borrower.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
@@ -647,31 +647,26 @@ export const submitReturnCode = async (req, res) => {
   
   tx.status = 'returned';
   tx.returnCodeUsed = true;
-  // depositReturned will be set to true when damage is processed or confirmed as none
   await tx.save();
   
   res.json({ 
     success: true,
     message: 'Item returned successfully. Lender can now inspect for damage or fully refund the deposit.',
     awaitingDamageInspection: true,
-    // Don't include depositDistribution yet - will be available after damage inspection
   });
 };
 
+// Force complete return (bypassing code) - only lender can do this
 export const forceCompleteReturn = async (req, res) => {
   const { id } = req.params;
-  const userId = req.userId; // FIXED
+  const userId = req.userId; 
   const tx = await Transaction.findById(id).populate('item', 'title');
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (tx.lender.toString() !== userId) return res.status(403).json({ error: 'Not authorized' });
   if (tx.status !== 'borrowed') return res.status(400).json({ error: 'Not in borrowed state' });
-
-  // Force return only changes status to 'returned' - no immediate deposit distribution
-  // Lender can then inspect and report damage or confirm no damage as usual
   
   tx.status = 'returned';
-  tx.returnCodeUsed = true; // Mark as if code was used
-  // depositReturned stays false - will be set after damage inspection
+  tx.returnCodeUsed = true;
   await tx.save();
   
   res.json({ 
@@ -711,6 +706,7 @@ export async function generatePickupCode(req, res) {
   }
 }
 
+// Use pickup code to mark transaction as borrowed
 export async function usePickupCode(req, res) {
   try {
     const { id } = req.params;

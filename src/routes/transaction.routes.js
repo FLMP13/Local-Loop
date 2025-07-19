@@ -29,6 +29,7 @@ import {
 
 const router = express.Router();
 
+// Transaction routes
 router.get('/', auth, getAllTransactions);
 router.post('/request', auth, requestLend);
 router.get('/borrowings', auth, getMyBorrowings);

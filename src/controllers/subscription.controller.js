@@ -5,9 +5,7 @@ import Subscription from '../models/subscription.js';
 import User from '../models/user.js';
 import { isPremiumUser } from '../utils/premiumUtils.js';
 
-/**
- * Get current user's subscription details
- */
+// Get current user's subscription details
 export async function getCurrentSubscription(req, res) {
   try {
     const subscription = await Subscription.findOne({
@@ -15,6 +13,7 @@ export async function getCurrentSubscription(req, res) {
       status: { $in: ['active', 'cancelled'] }
     }).sort({ createdAt: -1 });
 
+    // If no subscription found, return appropriate message
     if (!subscription) {
       return res.json({
         hasSubscription: false,
@@ -44,14 +43,14 @@ export async function getCurrentSubscription(req, res) {
   }
 }
 
-/**
- * Get user's subscription history
- */
+// Get user's subscription history
+ 
 export async function getSubscriptionHistory(req, res) {
   try {
     const { page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
+    // Fetch subscriptions for the current user
     const subscriptions = await Subscription.find({ user: req.userId })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -82,9 +81,7 @@ export async function getSubscriptionHistory(req, res) {
   }
 }
 
-/**
- * Create new subscription (used by premium upgrade)
- */
+// Create new subscription (used by premium upgrade)
 export async function createSubscription(req, res) {
   try {
     const { plan = 'monthly', paypalSubscriptionId } = req.body;
@@ -92,7 +89,8 @@ export async function createSubscription(req, res) {
     if (!['monthly', 'yearly'].includes(plan)) {
       return res.status(400).json({ error: 'Invalid plan type' });
     }
-
+    
+    // Check if user exists
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -161,18 +159,18 @@ export async function createSubscription(req, res) {
   }
 }
 
-/**
- * Cancel subscription
- */
+// Cancel subscription
 export async function cancelSubscription(req, res) {
   try {
     const { reason = '' } = req.body;
     
+    // Check if user exists
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Check if user has an active subscription
     const subscription = await Subscription.findOne({
       user: req.userId,
       status: 'active'
@@ -208,9 +206,7 @@ export async function cancelSubscription(req, res) {
   }
 }
 
-/**
- * Check for renewal notifications and mark as shown
- */
+// Check for renewal notifications and mark as shown
 export async function checkRenewalNotifications(req, res) {
   try {
     const subscription = await Subscription.findOne({
