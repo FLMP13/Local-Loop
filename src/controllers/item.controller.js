@@ -5,7 +5,7 @@ import Transaction from '../models/transaction.js';
 import { getDistanceFromZip } from '../utils/yourDistanceUtil.js';
 import { checkListingLimit, isPremiumUser, calculateRentalPricing } from '../utils/premiumUtils.js';
 
-// This function looks up the ZIP code in the database and returns its coordinates
+// Look up the ZIP code and returns its coordinates
 async function getLocationFromZip(zipCode) {
   const z = await ZipCode.findOne({ zipCode });
   if (!z) {
@@ -25,6 +25,7 @@ export const getAllItems = async (req, res) => {
     const { category, minPrice, maxPrice, search, sort } = req.query;
     const filter = {};
 
+    // Apply filters based on query parameters
     if (category) filter.category = category;
     if (minPrice || maxPrice) {
       filter.price = {};
@@ -38,14 +39,14 @@ export const getAllItems = async (req, res) => {
     let sortOption = {};
     if (sort === 'price_asc')  sortOption.price = 1;
     else if (sort === 'price_desc') sortOption.price = -1;
-    // Default: Priority sorting for premium users (premium items appear first)
-    else sortOption = { createdAt: -1 }; // Newest first as fallback
+    // Default: Priority sorting for premium users
+    else sortOption = { createdAt: -1 };
 
     const items = await Item.find(filter)
       .sort(sortOption)
       .populate('owner', 'firstName lastName nickname email zipCode premiumStatus');
 
-    // Fetch the user's zip code from the DB if logged in
+    // Fetch the user's zip code if logged in
     let userZip = null;
     if (req.userId) {
       const user = await User.findById(req.userId);
@@ -80,7 +81,7 @@ export const getAllItems = async (req, res) => {
         // 2. Among premium items: sort by view count (higher views = more popular)
         if (a.isPremiumListing && b.isPremiumListing) {
           if (b.viewCount !== a.viewCount) {
-            return b.viewCount - a.viewCount; // Higher views first
+            return b.viewCount - a.viewCount;
           }
           // 3. If same view count: newer first
           return new Date(b.createdAt) - new Date(a.createdAt);
@@ -97,7 +98,7 @@ export const getAllItems = async (req, res) => {
   }
 };
 
-// Create a new item with images and store it in the database including availability and location
+// Create a new item with images including availability and location
 export const createItem = async (req, res) => {
   try {
     // Check listing limit before creating the item
@@ -119,6 +120,7 @@ export const createItem = async (req, res) => {
       });
     }
 
+    // Parse availability from request body if provided
     let availability = [];
     if (req.body.availability) {
       availability = JSON.parse(req.body.availability);
@@ -152,7 +154,7 @@ export const createItem = async (req, res) => {
   }
 };
 
-// Delete an item by ID
+// Delete an item by ID and return a success message
 export const deleteItem = async (req, res) => {
   try {
     const id = req.params.id;
@@ -178,8 +180,8 @@ export const updateItem = async (req, res) => {
     let data = { ...req.body, location };
     if (req.body.availability != null) {
       data.availability = typeof req.body.availability === 'string'
-        ? JSON.parse(req.body.availability)   // parse only if string
-        : req.body.availability;             // already an object/array
+        ? JSON.parse(req.body.availability)  
+        : req.body.availability;             
     }
 
     const updatedItem = await Item.findByIdAndUpdate(id, data, { new: true });
@@ -247,7 +249,6 @@ export const getItemById = async (req, res) => {
 };
 
 // Get an item image by item ID and image index
-// Ongoing issues with image data not being sent correctly !
 export const getItemImage = async (req, res) => {
   try {
     const { id, index } = req.params;
@@ -339,7 +340,7 @@ export const getNearbyItems = async (req, res) => {
     const { radius = '', category, minPrice, maxPrice, search, sort } = req.query;
     const filter = {};
 
-    // ── Filters ──────────────────────────────────────────────
+    // Filter logic 
     if (category)      filter.category = category;
     if (minPrice || maxPrice) {
       filter.price = {};
@@ -350,7 +351,7 @@ export const getNearbyItems = async (req, res) => {
       filter.title = { $regex: search, $options: 'i' };
     }
 
-    // ── Radius / Local logic ──────────────────────────────────
+    // Local logic 
     if (radius === 'local') {                              // exact same-ZIP filter
       const user = await User.findById(req.userId, 'zipCode');
       if (!user) return res.status(404).json({ error: 'User not found' });
@@ -370,15 +371,14 @@ export const getNearbyItems = async (req, res) => {
         }
       };
     }
-    // else radius is '' or invalid → no geo filter
 
-    // Sorting ────────────────────────────────────────────
+    // Sorting logic
     let sortOption = {};
     if (sort === 'price_asc')      sortOption.price = 1;
     else if (sort === 'price_desc') sortOption.price = -1;
-    else sortOption._id = -1; // Default: Most Recent (newest first)
+    else sortOption._id = -1; // Default as Most Recent
 
-    // Query & Respond ──────────────────────────────────────
+    // Query & Respond
     const items = await Item
       .find(filter)
       .sort(sortOption)
@@ -387,6 +387,7 @@ export const getNearbyItems = async (req, res) => {
     const user = await User.findById(req.userId, 'zipCode');
     const userZip = user?.zipCode;
 
+    // Calculate distance for each item
     const itemsWithDistance = await Promise.all(items.map(async item => {
       let distance = null;
       if (userZip && item.owner?.zipCode) {

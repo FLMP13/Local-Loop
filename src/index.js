@@ -31,6 +31,15 @@ connectDB()
     await mongoose.model('User').syncIndexes(); // ensure indexes are created for the User model
     await ZipCode.syncIndexes(); // ensure indexes are created for the ZipCode model
 
+    // Health check endpoint for Docker
+    app.get('/api/health', (req, res) => {
+      res.status(200).json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+      });
+    });
+
     // global error handler
     app.use((err, req, res, next) => {
       console.error(err);

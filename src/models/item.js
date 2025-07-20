@@ -19,10 +19,10 @@ const itemSchema = new mongoose.Schema({
         required: true,
         enum: [
             'Electronics',
-            'Furniture', // Is that something to lend/borrow? // NO :) needs to be adapted for the whole list
+            'Furniture',
             'Clothing',
             'Books',
-            'Sports', // Is that something to lend/borrow? // NO :) needs to be adapted for the whole list
+            'Sports',
             'Toys',
             'Tools',
             'Other'

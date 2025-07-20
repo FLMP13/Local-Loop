@@ -8,6 +8,7 @@ import ZipCode from '../models/zipCode.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load ZIP codes from CSV file
 async function loadZipCodes() {
   await connect();
   const rows = [];

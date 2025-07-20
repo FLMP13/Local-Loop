@@ -118,6 +118,7 @@ export async function canReviewTransaction(req, res) {
     let canReview = false;
     let role = null;
 
+    // Check if the user is the lender or borrower and if they have not reviewed yet
     if (transaction.lender.toString() === req.userId && !transaction.lenderReviewed) {
       canReview = true;
       role = 'lender';

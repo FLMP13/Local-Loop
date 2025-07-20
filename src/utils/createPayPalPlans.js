@@ -30,6 +30,7 @@ async function getAccessToken() {
   return response.data.access_token;
 }
 
+// Function to create a PayPal product
 async function createProduct() {
   const accessToken = await getAccessToken();
   
@@ -40,6 +41,7 @@ async function createProduct() {
     category: 'SOFTWARE'
   };
 
+  // Ensure unique request ID to avoid duplicate product creation
   const response = await axios.post(`${PAYPAL_BASE_URL}/v1/catalogs/products`, productData, {
     headers: {
       'Content-Type': 'application/json',
@@ -51,6 +53,7 @@ async function createProduct() {
   return response.data.id;
 }
 
+// Function to create a PayPal plan
 async function createPlan(productId, planData) {
   const accessToken = await getAccessToken();
   
@@ -65,6 +68,7 @@ async function createPlan(productId, planData) {
   return response.data;
 }
 
+// Main function to create subscription plans
 async function createSubscriptionPlans() {
   try {
     console.log('🔄 Creating PayPal subscription plans...\n');
@@ -139,8 +143,8 @@ async function createSubscriptionPlans() {
     console.log(`✅ Yearly plan created: ${yearlyResult.id}\n`);
 
     // Display results
-    console.log('🎉 SUCCESS! Plans created successfully!\n');
-    console.log('📋 Add these to your .env file:');
+    console.log(' SUCCESS! Plans created successfully!\n');
+    console.log(' Add these to your .env file:');
     console.log(`PAYPAL_MONTHLY_PLAN_ID=${monthlyResult.id}`);
     console.log(`PAYPAL_YEARLY_PLAN_ID=${yearlyResult.id}\n`);
     
@@ -150,7 +154,7 @@ async function createSubscriptionPlans() {
     };
 
   } catch (error) {
-    console.error('❌ Error creating plans:', error.response?.data || error.message);
+    console.error(' Error creating plans:', error.response?.data || error.message);
     throw error;
   }
 }
@@ -158,10 +162,10 @@ async function createSubscriptionPlans() {
 // Run the script
 createSubscriptionPlans()
   .then(plans => {
-    console.log('✅ Script completed successfully!');
+    console.log('Script completed successfully!');
     process.exit(0);
   })
   .catch(error => {
-    console.error('❌ Script failed:', error.message);
+    console.error('Script failed:', error.message);
     process.exit(1);
   });

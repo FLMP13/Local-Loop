@@ -1,4 +1,5 @@
 // src/config/gridfsStorage.js
+// This file contains the GridFS storage configuration for file uploads using Multer and MongoDB
 import { GridFSBucket } from 'mongodb';
 import mongoose from 'mongoose';
 
@@ -13,13 +14,13 @@ class GridFsStorage {
     });
   }
 
-  // Called by multer _before_ uploading each file
+  // Handle file upload using GridFS called by multer when a file is uploaded
   _handleFile(req, file, cb) {
     const filename = `${Date.now()}_${file.originalname}`;
     const uploadStream = this.bucket.openUploadStream(filename, {
       contentType: file.mimetype
     });
-
+    // Pipe the file stream to GridFS
     file.stream
       .pipe(uploadStream)
       .on('error', err => cb(err))
@@ -35,7 +36,7 @@ class GridFsStorage {
       });
   }
 
-  // Called by multer on file removal (e.g. error cleanup)
+  // Called by multer on file removal
   _removeFile(req, file, cb) {
     this.bucket.delete(file.id, cb);
   }

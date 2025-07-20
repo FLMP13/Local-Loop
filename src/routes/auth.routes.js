@@ -5,6 +5,7 @@ import { signup, login } from '../controllers/auth.controller.js';
 
 const router = express.Router();
 
+// Setup routes for user authentication
 const setupRoutes = async () => {
   const storage = await gridFsFactory({ bucketName: 'profilePics' });
   const upload = multer({ storage });

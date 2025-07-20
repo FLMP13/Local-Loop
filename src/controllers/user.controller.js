@@ -1,5 +1,4 @@
 // \Backend\src\controllers\user.controller.js
-// Import user model and necessary libraries
 import User from '../models/user.js';
 import Subscription from '../models/subscription.js';
 import bcrypt from 'bcrypt';
@@ -150,8 +149,6 @@ export async function getPremiumStatus(req, res) {
 
 // Function to upgrade user to premium (redirects to subscription controller)
 export async function upgradeToPremium(req, res) {
-  // This function is kept for backward compatibility
-  // New implementations should use /api/subscriptions/create
   try {
     const { createSubscription } = await import('./subscription.controller.js');
     await createSubscription(req, res);
@@ -163,8 +160,6 @@ export async function upgradeToPremium(req, res) {
 
 // Function to cancel premium subscription (redirects to subscription controller)
 export async function cancelPremium(req, res) {
-  // This function is kept for backward compatibility
-  // New implementations should use /api/subscriptions/cancel
   try {
     const { cancelSubscription } = await import('./subscription.controller.js');
     await cancelSubscription(req, res);
