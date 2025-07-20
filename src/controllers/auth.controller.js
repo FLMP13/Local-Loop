@@ -8,6 +8,23 @@ import config from '../config/config.js';
 // Signup function to create a new user and hash the password
 export async function signup(req, res, next) {
   try {
+    const { password } = req.body;
+    
+    // Password validation
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
+      return res.status(400).json({ 
+        error: 'Password must contain at least one uppercase letter, one lowercase letter, and one number' 
+      });
+    }
+
     const hash = await bcrypt.hash(req.body.password, 10);
     const user = await User.create({
       ...req.body,

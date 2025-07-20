@@ -96,16 +96,44 @@ export async function changePassword(req, res) {
     if (!oldPassword || !newPassword) {
       return res.status(400).json({ error: 'Both old and new passwords required' });
     }
+
+    // Check if new password is same as old password
+    if (oldPassword === newPassword) {
+      return res.status(400).json({ error: 'New password must be different from current password' });
+    }
+
+    // Password strength validation
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    const hasUpperCase = /[A-Z]/.test(newPassword);
+    const hasLowerCase = /[a-z]/.test(newPassword);
+    const hasNumbers = /\d/.test(newPassword);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
+      return res.status(400).json({ 
+        error: 'New password must contain at least one uppercase letter, one lowercase letter, and one number' 
+      });
+    }
+
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
+    
     const match = await bcrypt.compare(oldPassword, user.passwordHash);
     if (!match) {
       return res.status(401).json({ error: 'Old password is incorrect' });
     }
 
+    // Additional check: verify the new password is actually different from the stored hash
+    const sameAsExisting = await bcrypt.compare(newPassword, user.passwordHash);
+    if (sameAsExisting) {
+      return res.status(400).json({ error: 'New password must be different from current password' });
+    }
+
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await user.save();
-    res.json({ message: 'Password updated' });
+    res.json({ message: 'Password updated successfully' });
   } catch (err) {
     console.error('changePassword error:', err);
     res.status(500).json({ error: 'Server error' });

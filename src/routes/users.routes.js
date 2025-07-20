@@ -20,7 +20,21 @@ const router = express.Router();
 // Setup routes for user-related operations
 const setupRoutes = async () => {
   const storage = await gridFsFactory({ bucketName: 'profilePics' });
-  const upload = multer({ storage });
+  const upload = multer({ 
+    storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+      files: 1
+    },
+    fileFilter: (req, file, cb) => {
+      // Check if file is an image
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'), false);
+      }
+    }
+  });
 
   // User routes
   router.get('/me', auth, getMe);
