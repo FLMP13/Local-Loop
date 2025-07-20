@@ -10,6 +10,7 @@ require('../models/zipCode');
 const Item       = mongoose.model('Item');
 const ZipCode    = mongoose.model('ZipCode');
 
+// This script backfills the location field of items based on the owner's zip code
 async function backfill() {
   await connectDB();
 

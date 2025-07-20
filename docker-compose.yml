@@ -1,0 +1,77 @@
+services:
+  # MongoDB Database - Commented out since we're using cloud MongoDB
+  # mongodb:
+  #   image: mongo:7.0
+  #   container_name: localloop-mongodb
+  #   restart: unless-stopped
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: root
+  #     MONGO_INITDB_ROOT_PASSWORD: rootpassword
+  #     MONGO_INITDB_DATABASE: localloop
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   networks:
+  #     - localloop-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: localloop-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Use cloud MongoDB - no MONGO_URI override, will use default from config.js
+      # Keep your existing external service credentials from config.js
+      PAYPAL_CLIENT_ID: "AXP0w_XIqcSbu3OdhrghpzVSIDbxSDiWHSXEc7leSJmnEeqD11GJYP3swV_ppwaxcYcJzTCN7gIN3xFc"
+      JWT_SECRET: "aSuperLongRandomString"
+    ports:
+      - "3000:3000"
+    volumes:
+      - backend_uploads:/app/uploads
+    networks:
+      - localloop-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://localhost:8080/api  # API requests will go through nginx proxy
+        REACT_APP_PAYPAL_CLIENT_ID: "AXP0w_XIqcSbu3OdhrghpzVSIDbxSDiWHSXEc7leSJmnEeqD11GJYP3swV_ppwaxcYcJzTCN7gIN3xFc"
+    container_name: localloop-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - localloop-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Named volumes for persistent data
+volumes:
+  mongodb_data:
+    driver: local
+  backend_uploads:
+    driver: local
+
+# Custom network for inter-service communication
+networks:
+  localloop-network:
+    driver: bridge

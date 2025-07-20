@@ -7,13 +7,13 @@ import Subscription from '../models/subscription.js';
 
 export async function updateSubscriptionStatuses() {
   try {
-    console.log('🔄 Starting subscription status update...');
+    console.log('Starting subscription status update...');
 
     // Calculate today at end of day (23:59:59)
     const now = new Date();
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     
-    console.log(`📅 Checking for subscriptions expired before: ${todayEnd.toISOString()}`);
+    console.log(`Checking for subscriptions expired before: ${todayEnd.toISOString()}`);
 
     // Find subscriptions that have expired (including today)
     const expiredSubscriptions = await Subscription.find({
@@ -21,7 +21,7 @@ export async function updateSubscriptionStatuses() {
       endDate: { $lt: todayEnd }
     });
 
-    console.log(`📊 Found ${expiredSubscriptions.length} expired subscriptions`);
+    console.log(`Found ${expiredSubscriptions.length} expired subscriptions`);
 
     let renewed = 0;
     let expired = 0;
@@ -84,22 +84,22 @@ export async function updateSubscriptionStatuses() {
           if (user && user.premiumStatus === 'active') {
             user.premiumStatus = 'expired';
             await user.save();
-            console.log(`⏰ Expired subscription for user ${user.email}`);
+            console.log(`Expired subscription for user ${user.email}`);
           }
 
           expired++;
         }
 
       } catch (error) {
-        console.error(`❌ Error updating subscription ${subscription._id}:`, error.message);
+        console.error(`Error updating subscription ${subscription._id}:`, error.message);
       }
     }
 
-    console.log('✅ Subscription status update completed');
+    console.log(' Subscription status update completed');
     return { renewed, expired, total: expiredSubscriptions.length };
 
   } catch (error) {
-    console.error('❌ Subscription status update failed:', error);
+    console.error(' Subscription status update failed:', error);
     throw error;
   }
 }
@@ -112,11 +112,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       return updateSubscriptionStatuses();
     })
     .then((result) => {
-      console.log('📊 Results:', result);
+      console.log(' Results:', result);
       process.exit(0);
     })
     .catch((error) => {
-      console.error('❌ Script failed:', error);
+      console.error(' Script failed:', error);
       process.exit(1);
     })
     .finally(() => {
